@@ -10,7 +10,9 @@
     "mcp:start": "tsx mcp/server.ts",
     "mcp:test": "node scripts/test-mcp.js",
     "mcp:test:stdio": "node scripts/test-mcp-stdio.mjs",
-    "mcp:test:edge": "node scripts/test-mcp.js --edge"
+    "mcp:test:edge": "node scripts/test-mcp.js --edge",
+    "admin:list": "node scripts/admin-manage.js list",
+    "admin:create": "node scripts/admin-manage.js create"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",

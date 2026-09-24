@@ -2,12 +2,22 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield, Lock, Mail, ArrowRight, Loader2, AlertCircle } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import {
+  Shield,
+  Lock,
+  Phone,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 function AdminLoginForm() {
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const router = useRouter();
@@ -20,30 +30,25 @@ function AdminLoginForm() {
     setErrorMsg(null);
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim(), password }),
       });
 
-      if (error) {
-        setErrorMsg(
-          error.message === "Invalid login credentials"
-            ? "بيانات الدخول غير صحيحة. تأكد من البريد وكلمة المرور."
-            : error.message || "فشل تسجيل الدخول."
-        );
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setErrorMsg(data.error || "فشل تسجيل الدخول");
         return;
       }
 
-      if (data.session) {
-        router.push(redirectTo);
-        router.refresh();
-      } else {
-        setErrorMsg("تعذّر إنشاء الجلسة. حاول مرة أخرى.");
-      }
+      // نجاح — إعادة توجيه
+      router.push(redirectTo);
+      router.refresh();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg("حدث خطأ غير متوقع أثناء تسجيل الدخول: " + (err.message || ""));
+      setErrorMsg("تعذّر الاتصال بالخادم. حاول مرة أخرى.");
     } finally {
       setLoading(false);
     }
@@ -59,7 +64,7 @@ function AdminLoginForm() {
             <Shield className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-extrabold text-white">لوحة تحكم الأدمن</h1>
-          <p className="text-xs text-gray-400">دخول مشرفي الدفعة فقط — مصادقة Supabase Auth</p>
+          <p className="text-xs text-gray-400">دخول مشرفي الدفعة — مصادقة برقم الهاتف</p>
         </div>
 
         {errorMsg && (
@@ -72,18 +77,23 @@ function AdminLoginForm() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-blue-400" />
-              البريد الإلكتروني للأدمن
+              <Phone className="w-3.5 h-3.5 text-blue-400" />
+              رقم الهاتف
             </label>
             <input
-              type="email"
-              placeholder="admin@batch.edu"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="tel"
+              inputMode="tel"
+              placeholder="01040945655"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
               required
               autoFocus
-              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+              dir="ltr"
+              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition text-left"
             />
+            <p className="text-[10px] text-gray-500">
+              أدخل الرقم بصيغة محلية (مثال: 01012345678) أو E.164 (+201012345678)
+            </p>
           </div>
 
           <div className="space-y-1">
@@ -91,14 +101,24 @@ function AdminLoginForm() {
               <Lock className="w-3.5 h-3.5 text-amber-400" />
               كلمة المرور
             </label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300 transition"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button
@@ -112,10 +132,30 @@ function AdminLoginForm() {
                 <span>جاري التحقق...</span>
               </>
             ) : (
-              <span>تسجيل الدخول للوحة التحكم</span>
+              <span>تسجيل الدخول</span>
             )}
           </button>
         </form>
+
+        <div className="bg-blue-950/30 border border-blue-500/20 p-3 rounded-xl space-y-1">
+          <div className="flex items-center gap-1.5 text-blue-300 text-xs font-semibold">
+            <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+            <span>الحساب الأساسي للتجربة:</span>
+          </div>
+          <div className="text-[11px] text-gray-400 space-y-0.5">
+            <p>
+              <span className="text-gray-500">الهاتف:</span>{" "}
+              <code className="text-blue-300 font-mono">01040945655</code>
+            </p>
+            <p>
+              <span className="text-gray-500">كلمة المرور الافتراضية:</span>{" "}
+              <code className="text-blue-300 font-mono">Admin@2026#Secure</code>
+            </p>
+            <p className="text-[10px] text-amber-400/80 pt-1">
+              ⚠️ غيّر كلمة المرور بعد أول تسجيل دخول من قسم "الفريق".
+            </p>
+          </div>
+        </div>
 
         <div className="pt-4 border-t border-gray-800/80 text-center">
           <a href="/student" className="text-xs text-gray-400 hover:text-gray-200 inline-flex items-center gap-1 transition">

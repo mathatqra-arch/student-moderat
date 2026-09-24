@@ -15,9 +15,11 @@ import {
   Key,
   MessageSquare,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 type Step = "phone" | "code" | "set-password" | "password-login";
+type OtpMode = "firebase" | "screen" | null;
 
 function AdminLoginForm() {
   const router = useRouter();
@@ -39,6 +41,60 @@ function AdminLoginForm() {
   const [otpCode, setOtpCode] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<number>(0);
   const [userInfo, setUserInfo] = useState<{ name: string; role: string } | null>(null);
+  const [otpMode, setOtpMode] = useState<OtpMode>(null);
+  const [firebaseReady, setFirebaseReady] = useState<boolean | null>(null);
+  const [firebaseVerifier, setFirebaseVerifier] = useState<any>(null);
+
+  // التحقق من إعدادات Firebase عند التحميل
+  useEffect(() => {
+    fetch("/api/admin/firebase/setup")
+      .then((res) => res.json())
+      .then((data) => {
+        setFirebaseReady(data.ready);
+        // تحميل Firebase client SDK فقط لو مُهيّأ
+        if (data.ready) {
+          loadFirebaseClient();
+        }
+      })
+      .catch(() => setFirebaseReady(false));
+  }, []);
+
+  // تحميل Firebase client SDK (للـ browser-side OTP)
+  async function loadFirebaseClient() {
+    try {
+      // Firebase Phone Auth يحتاج RecaptchaVerifier
+      const { initializeApp } = await import("firebase/app");
+      const { getAuth, RecaptchaVerifier, signInWithPhoneNumber } = await import("firebase/auth");
+
+      const firebaseConfig = {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+
+      // إعداد reCAPTCHA invisible
+      const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible",
+        callback: () => {},
+        "expired-callback": () => {},
+      });
+
+      setFirebaseVerifier({
+        auth,
+        verifier,
+        signInWithPhoneNumber,
+      });
+    } catch (err) {
+      console.error("Failed to load Firebase client:", err);
+      setFirebaseReady(false);
+    }
+  }
 
   // Timer for retry
   useEffect(() => {
@@ -48,7 +104,7 @@ function AdminLoginForm() {
     }
   }, [retryAfter]);
 
-  // Send OTP
+  // إرسال OTP — Firebase أولاً، fallback للـ screen OTP
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim()) return;
@@ -59,6 +115,40 @@ function AdminLoginForm() {
     setOtpCode(null);
 
     try {
+      // محاولة Firebase أولاً (SMS حقيقي)
+      if (firebaseReady && firebaseVerifier) {
+        const normalizedPhone = normalizePhoneForFirebase(phone);
+        try {
+          const confirmationResult = await firebaseVerifier.signInWithPhoneNumber(
+            firebaseVerifier.auth,
+            normalizedPhone,
+            firebaseVerifier.verifier
+          );
+
+          setOtpMode("firebase");
+          setInfoMsg("تم إرسال رمز التحقق إلى رقمك عبر SMS (Firebase)");
+          if (userInfo?.name) {
+            // keep
+          }
+          setStep("code");
+          // نخزّن confirmationResult في متغير window (مؤقت)
+          (window as any).__firebaseConfirmation = confirmationResult;
+          return;
+        } catch (err: any) {
+          console.error("Firebase OTP failed:", err);
+          // لو فشل Firebase (مثلاً quota)، نكمل بـ screen OTP كـ fallback
+          if (err.code === "auth/quota-exceeded") {
+            setErrorMsg("تجاوزت حصة Firebase اليومية (10 SMS). سنستخدم OTP على الشاشة.");
+          } else if (err.code === "auth/invalid-phone-number") {
+            setErrorMsg("رقم الهاتف غير صالح. تحقق من الصيغة.");
+            return;
+          } else {
+            setErrorMsg("Firebase فشل: " + (err.message || "خطأ غير معروف") + " — سنستخدم OTP على الشاشة.");
+          }
+        }
+      }
+
+      // Fallback: OTP على الشاشة
       const res = await fetch("/api/admin/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,9 +164,9 @@ function AdminLoginForm() {
         return;
       }
 
-      setInfoMsg("تم إرسال رمز التحقق إلى رقمك");
+      setOtpMode("screen");
+      setInfoMsg("تم إرسال رمز التحقق (وضع التطوير — الرمز معروض هنا)");
       if (data.code) {
-        // وضع التطوير — الرمز معروض هنا
         setOtpCode(data.code);
       }
       if (data.user_preview) {
@@ -90,7 +180,16 @@ function AdminLoginForm() {
     }
   };
 
-  // Verify OTP
+  // تطبيع رقم الهاتف لـ Firebase (E.164 صارم)
+  function normalizePhoneForFirebase(phone: string): string {
+    const cleaned = phone.replace(/[\s\-()]/g, "").trim();
+    if (cleaned.startsWith("+")) return cleaned;
+    if (cleaned.startsWith("201") && cleaned.length === 12) return "+" + cleaned;
+    if (cleaned.startsWith("01") && cleaned.length === 11) return "+2" + cleaned;
+    return cleaned;
+  }
+
+  // التحقق من الرمز
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.length !== 6) {
@@ -102,6 +201,48 @@ function AdminLoginForm() {
     setErrorMsg(null);
 
     try {
+      // Firebase verification
+      if (otpMode === "firebase" && (window as any).__firebaseConfirmation) {
+        const confirmation = (window as any).__firebaseConfirmation;
+        try {
+          const userCredential = await confirmation.confirm(code);
+          const idToken = await userCredential.user.getIdToken();
+
+          // أرسل الـ idToken للـ server للتحقق وإنشاء Supabase session
+          const res = await fetch("/api/admin/firebase/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id_token: idToken }),
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            setErrorMsg(data.error || "فشل التحقق من Firebase");
+            return;
+          }
+
+          if (data.needs_password_change) {
+            setSuccessMsg("تم التحقق بنجاح! عيّن كلمة مرور جديدة للمتابعة.");
+            setStep("set-password");
+          } else {
+            router.push("/admin");
+            router.refresh();
+          }
+          return;
+        } catch (err: any) {
+          console.error("Firebase confirm failed:", err);
+          if (err.code === "auth/invalid-verification-code") {
+            setErrorMsg("الرمز غير صحيح. حاول مرة أخرى.");
+          } else if (err.code === "auth/code-expired") {
+            setErrorMsg("انتهت صلاحية الرمز. اطلب رمزاً جديداً.");
+          } else {
+            setErrorMsg("فشل التحقق: " + (err.message || ""));
+          }
+          return;
+        }
+      }
+
+      // Screen OTP verification (fallback)
       const res = await fetch("/api/admin/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,7 +269,7 @@ function AdminLoginForm() {
     }
   };
 
-  // Set new password
+  // تعيين كلمة مرور جديدة
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
@@ -172,7 +313,7 @@ function AdminLoginForm() {
     }
   };
 
-  // Password login (alternative)
+  // Password login (بديل)
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim() || !passwordLogin) return;
@@ -206,6 +347,9 @@ function AdminLoginForm() {
     <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
 
+      {/* Container for Firebase reCAPTCHA */}
+      <div id="recaptcha-container" />
+
       <div className="max-w-md w-full glass-card p-6 md:p-8 rounded-3xl space-y-6 border border-gray-800 relative z-10">
         <div className="text-center space-y-2">
           <div className="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/10">
@@ -214,6 +358,22 @@ function AdminLoginForm() {
           <h1 className="text-2xl font-extrabold text-white">لوحة تحكم الأدمن</h1>
           <p className="text-xs text-gray-400">دخول مشرفي الدفعة — مصادقة برقم الهاتف</p>
         </div>
+
+        {/* Auth Provider Badge */}
+        {firebaseReady !== null && (
+          <div className={`flex items-center gap-2 p-2 rounded-xl text-[11px] border ${
+            firebaseReady
+              ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300"
+              : "bg-amber-950/40 border-amber-500/30 text-amber-300"
+          }`}>
+            <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>
+              {firebaseReady
+                ? "Firebase Phone Auth مُفعّل — سيصلك الرمز عبر SMS حقيقي"
+                : "وضع التطوير — الرمز سيظهر على الشاشة (لتفعيل Firebase شغّل /api/admin/firebase/setup)"}
+            </span>
+          </div>
+        )}
 
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 text-[10px] text-gray-500">
@@ -297,7 +457,7 @@ function AdminLoginForm() {
 
             <button
               type="submit"
-              disabled={loading || retryAfter > 0}
+              disabled={loading || retryAfter > 0 || firebaseReady === null}
               className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm"
             >
               {loading ? (
@@ -313,7 +473,7 @@ function AdminLoginForm() {
               ) : (
                 <>
                   <MessageSquare className="w-4 h-4" />
-                  <span>إرسال رمز التحقق</span>
+                  <span>إرسال رمز التحقق {firebaseReady ? "(SMS)" : ""}</span>
                 </>
               )}
             </button>
@@ -333,7 +493,7 @@ function AdminLoginForm() {
         {/* Step 2: Code */}
         {step === "code" && (
           <form onSubmit={handleVerifyCode} className="space-y-4">
-            {otpCode && (
+            {otpCode && otpMode === "screen" && (
               <div className="bg-amber-950/60 border border-amber-500/30 p-3 rounded-xl text-center space-y-1">
                 <p className="text-[10px] text-amber-400 font-semibold">
                   ⚠️ وضع التطوير — الرمز:
@@ -342,7 +502,18 @@ function AdminLoginForm() {
                   {otpCode}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  في الإنتاج: سيُرسل الرمز عبر SMS لرقمك
+                  لتفعيل Firebase Phone Auth (SMS حقيقي) راجع دليل الإعداد
+                </p>
+              </div>
+            )}
+
+            {otpMode === "firebase" && (
+              <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl text-center space-y-1">
+                <p className="text-[11px] text-emerald-300 font-semibold">
+                  ✅ تم إرسال الرمز عبر SMS إلى رقمك
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  قد يستغرق وصول الرسالة 10-30 ثانية
                 </p>
               </div>
             )}
@@ -397,6 +568,7 @@ function AdminLoginForm() {
                   setErrorMsg(null);
                   setInfoMsg(null);
                   setOtpCode(null);
+                  setOtpMode(null);
                 }}
                 className="text-gray-400 hover:text-gray-200 transition"
               >

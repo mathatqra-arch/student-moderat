@@ -15,7 +15,16 @@ const PROTECTED_PATHS = ["/admin"];
 const PROTECTED_API_PATHS = ["/api/admin"];
 
 // استثناءات (لا تتطلب تسجيل دخول)
-const PUBLIC_PATHS = ["/admin/login", "/api/admin/login", "/api/admin/health", "/api/admin/setup-otp", "/api/admin/otp/send", "/api/admin/otp/verify"];
+const PUBLIC_PATHS = [
+  "/admin/login",
+  "/api/admin/login",
+  "/api/admin/health",
+  "/api/admin/setup-otp",
+  "/api/admin/otp/send",
+  "/api/admin/otp/verify",
+  "/api/admin/firebase/verify",
+  "/api/admin/firebase/setup",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

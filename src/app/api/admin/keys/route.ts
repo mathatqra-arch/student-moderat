@@ -8,8 +8,7 @@ function getSupabaseAdminClient() {
     "https://apcxwxnkntegbkimsmty.supabase.co";
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "placeholder";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwY3h3eG5rbnRlZ2JraW1zbXR5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDI1Njc0OCwiZXhwIjoyMTA1ODMyNzQ4fQ.PfjahE-jksd2KLK6nIYgf1mx13QIbmIlHMI2c_t-x60";
 
   return createClient(supabaseUrl, supabaseKey);
 }

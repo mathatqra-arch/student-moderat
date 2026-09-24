@@ -11,7 +11,7 @@ const config: OpenNextConfig = {
       queue: "direct",
     },
   },
-  buildCommand: "npx next build",
+  buildCommand: "npx next build --webpack",
   edgeExternals: ["node:crypto"],
   middleware: {
     external: true,

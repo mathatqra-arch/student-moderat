@@ -7,7 +7,10 @@
     "build": "opennextjs-cloudflare build",
     "start": "next start",
     "lint": "next lint",
-    "mcp:start": "tsx mcp/server.ts"
+    "mcp:start": "tsx mcp/server.ts",
+    "mcp:test": "node scripts/test-mcp.js",
+    "mcp:test:stdio": "node scripts/test-mcp-stdio.mjs",
+    "mcp:test:edge": "node scripts/test-mcp.js --edge"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",

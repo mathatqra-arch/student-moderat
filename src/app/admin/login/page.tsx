@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Shield, Lock, Mail, ArrowRight } from "lucide-react";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Shield, Lock, Mail, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/admin";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,18 +27,23 @@ export default function AdminLoginPage() {
       });
 
       if (error) {
-        // Demonstration fallback mode if admin credentials are new or testing
-        if (email === "admin@batch.edu" && password === "admin123") {
-          router.push("/admin");
-          return;
-        }
-        setErrorMsg(error.message || "بيانات الدخول غير صحيحة.");
-      } else if (data.session) {
-        router.push("/admin");
+        setErrorMsg(
+          error.message === "Invalid login credentials"
+            ? "بيانات الدخول غير صحيحة. تأكد من البريد وكلمة المرور."
+            : error.message || "فشل تسجيل الدخول."
+        );
+        return;
       }
-    } catch (err) {
+
+      if (data.session) {
+        router.push(redirectTo);
+        router.refresh();
+      } else {
+        setErrorMsg("تعذّر إنشاء الجلسة. حاول مرة أخرى.");
+      }
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg("حدث خطأ أثناء محاولة تسجيل الدخول.");
+      setErrorMsg("حدث خطأ غير متوقع أثناء تسجيل الدخول: " + (err.message || ""));
     } finally {
       setLoading(false);
     }
@@ -52,12 +59,13 @@ export default function AdminLoginPage() {
             <Shield className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-extrabold text-white">لوحة تحكم الأدمن</h1>
-          <p className="text-xs text-gray-400">تأمين كامل وتصريح بدخول المشرفين والمساعدين فقط</p>
+          <p className="text-xs text-gray-400">دخول مشرفي الدفعة فقط — مصادقة Supabase Auth</p>
         </div>
 
         {errorMsg && (
-          <div className="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl text-center">
-            {errorMsg}
+          <div className="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
@@ -73,7 +81,8 @@ export default function AdminLoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              autoFocus
+              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
             />
           </div>
 
@@ -88,26 +97,47 @@ export default function AdminLoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm"
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm"
           >
-            {loading ? "جاري التحقق..." : "تسجيل الدخول للوحة التحكم"}
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>جاري التحقق...</span>
+              </>
+            ) : (
+              <span>تسجيل الدخول للوحة التحكم</span>
+            )}
           </button>
         </form>
 
         <div className="pt-4 border-t border-gray-800/80 text-center">
-          <a href="/student" className="text-xs text-gray-400 hover:text-gray-200 inline-flex items-center gap-1">
+          <a href="/student" className="text-xs text-gray-400 hover:text-gray-200 inline-flex items-center gap-1 transition">
             <ArrowRight className="w-3.5 h-3.5" />
             العودة لواجهة الطلاب العامة
           </a>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+        </div>
+      }
+    >
+      <AdminLoginForm />
+    </Suspense>
   );
 }

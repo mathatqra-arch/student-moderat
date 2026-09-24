@@ -20,22 +20,59 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify Bearer Authentication Token
+    // Verify Bearer Authentication Token against static env keys and api_keys table
     const authHeader = req.headers.get("Authorization");
-    const secretToken = Deno.env.get("MCP_SECRET_TOKEN") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const apiKeyHeader = req.headers.get("x-api-key");
 
-    if (secretToken && authHeader) {
-      const token = authHeader.replace("Bearer ", "").trim();
-      if (token !== secretToken && token !== Deno.env.get("SUPABASE_ANON_KEY")) {
-        return new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            error: { code: -32001, message: "Unauthorized token" },
-            id: null,
-          }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    let token = "";
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    } else if (apiKeyHeader) {
+      token = apiKeyHeader.trim();
+    }
+
+    let isAuthorized = false;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const secretToken = Deno.env.get("MCP_SECRET_TOKEN");
+
+    if (token) {
+      if (
+        token === serviceKey ||
+        token === anonKey ||
+        (secretToken && token === secretToken)
+      ) {
+        isAuthorized = true;
+      } else {
+        // Query generated api_keys table in Supabase database
+        const { data, error } = await supabase
+          .from("api_keys")
+          .select("id")
+          .eq("key_value", token)
+          .single();
+
+        if (!error && data) {
+          isAuthorized = true;
+          await supabase
+            .from("api_keys")
+            .update({ last_used_at: new Date().toISOString() })
+            .eq("id", data.id);
+        }
       }
+    }
+
+    if (!isAuthorized) {
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: {
+            code: -32001,
+            message: "Unauthorized: Invalid API Key or Bearer Token",
+          },
+          id: null,
+        }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const { jsonrpc, method, params, id } = await req.json();

@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Shield, MessageSquare, FileText, Users, Key, LogOut, ExternalLink } from "lucide-react";
+import { Shield, MessageSquare, FileText, Users, Key, LogOut, ExternalLink, Server } from "lucide-react";
 import InquiriesManager from "@/components/admin/InquiriesManager";
 import ContentManager from "@/components/admin/ContentManager";
 import TeamManager from "@/components/admin/TeamManager";
 import ApiKeyManager from "@/components/admin/ApiKeyManager";
+import McpPage from "@/app/admin/mcp/page";
 
 export default function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"inquiries" | "content" | "team" | "keys">("inquiries");
+  const [activeTab, setActiveTab] = useState<"inquiries" | "content" | "team" | "keys" | "mcp">("inquiries");
 
   return (
     <div className="min-h-screen bg-dark-bg text-gray-100 pb-12">
@@ -86,7 +87,19 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Key className="w-4 h-4" />
-            <span>مفاتيح API & ChatGPT</span>
+            <span>مفاتيح API</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("mcp")}
+            className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
+              activeTab === "mcp"
+                ? "bg-purple-600 text-white shadow-lg shadow-purple-600/20"
+                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
+            }`}
+          >
+            <Server className="w-4 h-4" />
+            <span>خادم MCP</span>
           </button>
 
           <button
@@ -106,6 +119,7 @@ export default function AdminDashboardPage() {
         {activeTab === "inquiries" && <InquiriesManager />}
         {activeTab === "content" && <ContentManager />}
         {activeTab === "keys" && <ApiKeyManager />}
+        {activeTab === "mcp" && <McpPage />}
         {activeTab === "team" && <TeamManager />}
       </main>
     </div>

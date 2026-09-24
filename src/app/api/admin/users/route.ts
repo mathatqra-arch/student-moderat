@@ -129,7 +129,8 @@ export async function POST(request: Request) {
     }
 
     const normalizedPhone = normalizeEgyptianPhone(phone);
-    const actualPassword = password?.trim() || generatePassword();
+    // تعيين كلمة مرور افتراضية 000000 — سيُطلب من المستخدم تغييرها عند أول دخول
+    const actualPassword = password?.trim() || "000000";
     const email = `admin+${Date.now().toString(36)}@batch-platform.local`;
 
     const adminClient = getAdminClient();
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
         name: name.trim(),
         role: role || "assistant",
         full_name: name.trim(),
+        needs_password_change: !password?.trim(), // true فقط لو لم يُدخل كلمة مرور مخصّصة
       },
       app_metadata: {
         role: "admin",
@@ -177,10 +179,10 @@ export async function POST(request: Request) {
       ok: true,
       user_id: newUser.user.id,
       phone: newUser.user.phone,
-      password: password ? undefined : actualPassword, // أرجع كلمة المرور فقط لو كانت مولّدة تلقائياً
+      needs_password_change: !password?.trim(),
       message: password
         ? "تم إنشاء الحساب بنجاح"
-        : "تم إنشاء الحساب بنجاح. احفظ كلمة المرور المولّدة.",
+        : "تم إنشاء الحساب. سيستخدم الأدمن OTP لأول دخول، ثم يضبط كلمة مروره الخاصة.",
     });
   } catch (error: any) {
     console.error("POST /api/admin/users error:", error);

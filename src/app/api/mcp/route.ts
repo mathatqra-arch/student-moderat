@@ -61,6 +61,29 @@ async function verifyAuth(request: Request): Promise<boolean> {
   return false;
 }
 
+// GET: Server Probe & Discovery Metadata
+export async function GET(request: Request) {
+  const host = request.headers.get("host") || "student-moderat.mathatqra.workers.dev";
+  const protocol = request.headers.get("x-forwarded-proto") || "https";
+  const baseUrl = `${protocol}://${host}`;
+
+  return NextResponse.json({
+    status: "online",
+    name: "Student Management MCP Server",
+    version: "1.0.0",
+    protocolVersion: "2024-11-05",
+    authentication: {
+      types_supported: ["api_key", "bearer", "oauth2"],
+      oauth2: {
+        authorization_endpoint: `${baseUrl}/api/mcp/oauth/authorize`,
+        token_endpoint: `${baseUrl}/api/mcp/oauth/token`,
+      },
+      api_key_header: "Authorization: Bearer <bmp_key_...>",
+    },
+    openapi_schema: `${baseUrl}/api/mcp/openapi.json`,
+  });
+}
+
 export async function POST(request: Request) {
   // 1. Check Authentication
   const isAuthorized = await verifyAuth(request);
@@ -82,6 +105,29 @@ export async function POST(request: Request) {
     const supabase = getSupabaseClient();
     const body = await request.json();
     const { jsonrpc, method, params, id } = body;
+
+    // Handle MCP Protocol "initialize" method
+    if (method === "initialize") {
+      return NextResponse.json({
+        jsonrpc: "2.0",
+        result: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            tools: {},
+          },
+          serverInfo: {
+            name: "student-management-mcp",
+            version: "1.0.0",
+          },
+        },
+        id,
+      });
+    }
+
+    // Handle MCP Protocol "notifications/initialized"
+    if (method === "notifications/initialized") {
+      return new Response(null, { status: 204 });
+    }
 
     // Handle MCP Tools Discovery Request (tools/list)
     if (method === "tools/list") {

@@ -15,6 +15,26 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Handle GET Request (Server Probe / Metadata Discovery)
+  if (req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        status: "online",
+        server: "Batch Management Platform MCP Server",
+        version: "1.0.0",
+        protocolVersion: "2024-11-05",
+        auth_methods: ["bearer", "x-api-key"],
+        oauth: {
+          supported: false,
+          note: "This Edge Function uses API Key authentication (Authorization: Bearer <bmp_key_...>) or OAuth via the main application domain.",
+          oauth_authorization_endpoint: "https://student-moderat.mathatqra.workers.dev/api/mcp/oauth/authorize",
+          oauth_token_endpoint: "https://student-moderat.mathatqra.workers.dev/api/mcp/oauth/token"
+        }
+      }, null, 2),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -76,6 +96,32 @@ serve(async (req) => {
     }
 
     const { jsonrpc, method, params, id } = await req.json();
+
+    // MCP Protocol: Handle "initialize" method
+    if (method === "initialize") {
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          result: {
+            protocolVersion: "2024-11-05",
+            capabilities: {
+              tools: {},
+            },
+            serverInfo: {
+              name: "student-management-mcp",
+              version: "1.0.0",
+            },
+          },
+          id,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // MCP Protocol: Handle "notifications/initialized"
+    if (method === "notifications/initialized") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
 
     // MCP Tools Discovery
     if (method === "tools/list") {

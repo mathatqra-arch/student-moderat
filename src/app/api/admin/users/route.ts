@@ -5,9 +5,9 @@ import { createServerClient } from "@supabase/ssr";
 
 // ==========================================
 // Admin Users Management API
-// - GET:    استرجاع قائمة الأدمن (phone + name)
-// - POST:   إنشاء أدمن جديد برقم هاتف
-// - PUT:    تحديث (تغيير كلمة مرور)
+// - GET:    استرجاع قائمة الأدمن + أذوناتهم
+// - POST:   إنشاء أدمن جديد (phone + password + permissions)
+// - PUT:    تحديث (تغيير كلمة مرور / تحديث أذونات)
 // - DELETE: حذف حساب أدمن
 // ==========================================
 
@@ -51,56 +51,86 @@ async function getAuthenticatedUser() {
   return user;
 }
 
-// تحويل رقم مصري إلى E.164
 function normalizeEgyptianPhone(phone: string): string {
   const cleaned = phone.replace(/[\s\-()]/g, "").trim();
   if (cleaned.startsWith("+")) return cleaned;
   if (cleaned.startsWith("201") && cleaned.length === 12) return "+" + cleaned;
   if (cleaned.startsWith("01") && cleaned.length === 11) return "+2" + cleaned;
-  if (cleaned.startsWith("2010") || cleaned.startsWith("2011") || cleaned.startsWith("2012") || cleaned.startsWith("2015")) {
-    return "+" + cleaned;
-  }
   return cleaned;
 }
 
-// توليد كلمة مرور عشوائية قوية
-function generatePassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$";
-  let pwd = "";
-  for (let i = 0; i < 12; i++) {
-    pwd += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return pwd;
-}
+// الأذونات الافتراضية لمشرف جديد (assistant)
+const DEFAULT_PERMISSIONS = {
+  inquiries: { view: true, reply: true, delete: false },
+  announcements: { view: true, create: true, edit: true, delete: false },
+  tasks: { view: true, create: true, edit: true, delete: false },
+  team: { view: true, create: false, edit: false, delete: false },
+  api_keys: { view: false, create: false, delete: false },
+  mcp: { view: false, test: false },
+  settings: { view: false, edit: false },
+};
 
-// GET: قائمة الأدمن (phone + name)
+// أذونات الـ leader (كل شيء)
+const LEADER_PERMISSIONS = {
+  inquiries: { view: true, reply: true, delete: true },
+  announcements: { view: true, create: true, edit: true, delete: true },
+  tasks: { view: true, create: true, edit: true, delete: true },
+  team: { view: true, create: true, edit: true, delete: true },
+  api_keys: { view: true, create: true, delete: true },
+  mcp: { view: true, test: true },
+  settings: { view: true, edit: true },
+};
+
+// GET: قائمة الأدمن مع أذوناتهم
 export async function GET() {
   try {
     const user = await getAuthenticatedUser();
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const adminClient = getAdminClient();
-    const { data, error } = await adminClient.auth.admin.listUsers({
+
+    // جلب قائمة المستخدمين من auth.users
+    const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({
       page: 1,
       perPage: 1000,
     });
 
-    if (error) throw error;
+    if (usersError) throw usersError;
 
-    const users = (data.users || []).map((u) => ({
-      id: u.id,
-      phone: u.phone,
-      email: u.email,
-      created_at: u.created_at,
-      last_sign_in_at: u.last_sign_in_at,
-    }));
+    // جلب بيانات team_members (مع الأذونات)
+    const { data: teamMembers, error: teamError } = await adminClient
+      .from("team_members")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    return NextResponse.json({ users });
+    if (teamError) throw teamError;
+
+    // دمج البيانات
+    const users = (usersData.users || []).map((u) => {
+      const teamMember = teamMembers?.find((tm) => tm.user_id === u.id);
+      return {
+        id: u.id,
+        phone: u.phone,
+        email: u.email,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at,
+        name: teamMember?.name || null,
+        role: teamMember?.role || null,
+        permissions: teamMember?.permissions || null,
+        team_member_id: teamMember?.id || null,
+      };
+    });
+
+    // رتّب: team_members الأول، ثم الباقي
+    const sortedUsers = users.sort((a, b) => {
+      if (a.team_member_id && !b.team_member_id) return -1;
+      if (!a.team_member_id && b.team_member_id) return 1;
+      return 0;
+    });
+
+    return NextResponse.json({ users: sortedUsers });
   } catch (error: any) {
     console.error("GET /api/admin/users error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -112,101 +142,15 @@ export async function POST(request: Request) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
-    const { name, phone, role, password } = body;
+    const { name, phone, role, password, permissions } = body;
 
-    if (!name?.trim() || !phone?.trim()) {
+    if (!name?.trim() || !phone?.trim() || !password?.trim()) {
       return NextResponse.json(
-        { error: "الاسم ورقم الهاتف مطلوبان" },
-        { status: 400 }
-      );
-    }
-
-    const normalizedPhone = normalizeEgyptianPhone(phone);
-    // تعيين كلمة مرور افتراضية 000000 — سيُطلب من المستخدم تغييرها عند أول دخول
-    const actualPassword = password?.trim() || "000000";
-    const email = `admin+${Date.now().toString(36)}@batch-platform.local`;
-
-    const adminClient = getAdminClient();
-
-    // 1. إنشاء المستخدم في auth.users
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      phone: normalizedPhone,
-      phone_confirm: true,
-      email,
-      email_confirm: true,
-      password: actualPassword,
-      user_metadata: {
-        name: name.trim(),
-        role: role || "assistant",
-        full_name: name.trim(),
-        needs_password_change: !password?.trim(), // true فقط لو لم يُدخل كلمة مرور مخصّصة
-      },
-      app_metadata: {
-        role: "admin",
-        provider: "phone",
-      },
-    });
-
-    if (createError || !newUser.user) {
-      throw new Error(createError?.message || "فشل إنشاء المستخدم");
-    }
-
-    // 2. إضافته لجدول team_members
-    const { error: teamError } = await adminClient
-      .from("team_members")
-      .insert([
-        {
-          user_id: newUser.user.id,
-          name: name.trim(),
-          role: role || "assistant",
-        },
-      ]);
-
-    if (teamError) {
-      // rollback: حذف المستخدم إذا فشلت إضافته لـ team_members
-      await adminClient.auth.admin.deleteUser(newUser.user.id);
-      throw new Error(`فشلت الإضافة لجدول team_members: ${teamError.message}`);
-    }
-
-    return NextResponse.json({
-      ok: true,
-      user_id: newUser.user.id,
-      phone: newUser.user.phone,
-      needs_password_change: !password?.trim(),
-      message: password
-        ? "تم إنشاء الحساب بنجاح"
-        : "تم إنشاء الحساب. سيستخدم الأدمن OTP لأول دخول، ثم يضبط كلمة مروره الخاصة.",
-    });
-  } catch (error: any) {
-    console.error("POST /api/admin/users error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
-// PUT: تحديث (تغيير كلمة مرور)
-export async function PUT(request: Request) {
-  try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const { user_id, password } = body;
-
-    if (!user_id || !password) {
-      return NextResponse.json(
-        { error: "user_id و password مطلوبان" },
+        { error: "الاسم، رقم الهاتف، وكلمة المرور مطلوبة" },
         { status: 400 }
       );
     }
@@ -218,16 +162,134 @@ export async function PUT(request: Request) {
       );
     }
 
+    const normalizedPhone = normalizeEgyptianPhone(phone);
+    const email = `admin+${Date.now().toString(36)}@batch-platform.local`;
+
     const adminClient = getAdminClient();
-    const { error } = await adminClient.auth.admin.updateUserById(user_id, {
+
+    // 1. إنشاء المستخدم في auth.users
+    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+      phone: normalizedPhone,
+      phone_confirm: true,
+      email,
+      email_confirm: true,
       password,
+      user_metadata: {
+        name: name.trim(),
+        role: role || "assistant",
+        full_name: name.trim(),
+        needs_password_change: false, // المستخدم يدخل كلمة مروره الخاصة من البداية
+      },
+      app_metadata: {
+        role: "admin",
+        provider: "phone",
+      },
     });
 
-    if (error) throw error;
+    if (createError || !newUser.user) {
+      throw new Error(createError?.message || "فشل إنشاء المستخدم");
+    }
+
+    // 2. إضافته لجدول team_members مع الأذونات
+    const userPermissions =
+      role === "leader"
+        ? LEADER_PERMISSIONS
+        : permissions || DEFAULT_PERMISSIONS;
+
+    const { error: teamError } = await adminClient
+      .from("team_members")
+      .insert([
+        {
+          user_id: newUser.user.id,
+          name: name.trim(),
+          role: role || "assistant",
+          permissions: userPermissions,
+        },
+      ]);
+
+    if (teamError) {
+      await adminClient.auth.admin.deleteUser(newUser.user.id);
+      throw new Error(`فشلت الإضافة لـ team_members: ${teamError.message}`);
+    }
 
     return NextResponse.json({
       ok: true,
-      message: "تم تحديث كلمة المرور بنجاح",
+      user_id: newUser.user.id,
+      phone: newUser.user.phone,
+      message: "تم إنشاء الحساب بنجاح",
+    });
+  } catch (error: any) {
+    console.error("POST /api/admin/users error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// PUT: تحديث مستخدم (تغيير كلمة مرور / تحديث أذونات / تغيير role)
+export async function PUT(request: Request) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { user_id, password, permissions, role, name } = body;
+
+    if (!user_id) {
+      return NextResponse.json({ error: "user_id مطلوب" }, { status: 400 });
+    }
+
+    const adminClient = getAdminClient();
+
+    // 1. تحديث كلمة المرور إن وُجدت
+    if (password) {
+      if (password.length < 6) {
+        return NextResponse.json(
+          { error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" },
+          { status: 400 }
+        );
+      }
+
+      const { error: pwdError } = await adminClient.auth.admin.updateUserById(user_id, {
+        password,
+      });
+      if (pwdError) throw pwdError;
+
+      // تحديث password_changed_at
+      await adminClient
+        .from("team_members")
+        .update({ password_changed_at: new Date().toISOString() })
+        .eq("user_id", user_id);
+    }
+
+    // 2. تحديث الأذونات والـ role والاسم في team_members
+    const updateData: any = {};
+    if (permissions) {
+      // لو الـ role = leader، نضمن إنه عنده كل الأذونات
+      updateData.permissions = role === "leader" ? LEADER_PERMISSIONS : permissions;
+    }
+    if (role) {
+      updateData.role = role;
+      if (role === "leader" && !permissions) {
+        updateData.permissions = LEADER_PERMISSIONS;
+      }
+    }
+    if (name) {
+      updateData.name = name.trim();
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      const { error: teamError } = await adminClient
+        .from("team_members")
+        .update(updateData)
+        .eq("user_id", user_id);
+
+      if (teamError) throw teamError;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "تم تحديث المستخدم بنجاح",
     });
   } catch (error: any) {
     console.error("PUT /api/admin/users error:", error);
@@ -240,23 +302,16 @@ export async function DELETE(request: Request) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
     const { user_id } = body;
 
     if (!user_id) {
-      return NextResponse.json(
-        { error: "user_id مطلوب" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "user_id مطلوب" }, { status: 400 });
     }
 
-    // منع حذف نفسك
     if (user_id === user.id) {
       return NextResponse.json(
         { error: "لا يمكنك حذف حسابك أثناء تسجيل الدخول به" },
@@ -266,19 +321,36 @@ export async function DELETE(request: Request) {
 
     const adminClient = getAdminClient();
 
+    // التحقق من عدم حذف الـ leader الأخير
+    const { data: targetMember } = await adminClient
+      .from("team_members")
+      .select("role")
+      .eq("user_id", user_id)
+      .single();
+
+    if (targetMember?.role === "leader") {
+      const { count } = await adminClient
+        .from("team_members")
+        .select("*", { count: "exact", head: true })
+        .eq("role", "leader");
+
+      if ((count || 0) <= 1) {
+        return NextResponse.json(
+          { error: "لا يمكن حذف آخر leader في النظام" },
+          { status: 400 }
+        );
+      }
+    }
+
     // 1. حذف من team_members
     const { error: teamError } = await adminClient
       .from("team_members")
       .delete()
       .eq("user_id", user_id);
-
-    if (teamError) {
-      console.warn("Failed to delete from team_members:", teamError);
-    }
+    if (teamError) console.warn("team_members delete:", teamError);
 
     // 2. حذف من auth.users
     const { error: authError } = await adminClient.auth.admin.deleteUser(user_id);
-
     if (authError) throw authError;
 
     return NextResponse.json({

@@ -4,9 +4,8 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
 // ==========================================
-// Admin Phone Login Endpoint
-// يستقبل phone + password ويحوّله server-side إلى email+password
-// لأن Phone logins معطّلة في Supabase Dashboard افتراضياً
+// Admin Login Endpoint — Phone + Password
+// يستقبل phone + password وينشئ Supabase session
 // ==========================================
 
 const SUPABASE_URL =
@@ -16,7 +15,6 @@ const SUPABASE_ANON_KEY =
 const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-// عميل بـ service_role للبحث في auth.users
 function getAdminClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY غير مُهيّأ");
@@ -26,18 +24,11 @@ function getAdminClient() {
   });
 }
 
-// تحويل رقم مصري محلي إلى صيغة E.164
-// 01040945655 → +201040945655
-// 201040945655 → +201040945655
-// +201040945655 → +201040945655
 function normalizeEgyptianPhone(phone: string): string {
   const cleaned = phone.replace(/[\s\-()]/g, "").trim();
   if (cleaned.startsWith("+")) return cleaned;
   if (cleaned.startsWith("201") && cleaned.length === 12) return "+" + cleaned;
   if (cleaned.startsWith("01") && cleaned.length === 11) return "+2" + cleaned;
-  if (cleaned.startsWith("2010") || cleaned.startsWith("2011") || cleaned.startsWith("2012") || cleaned.startsWith("2015")) {
-    return "+" + cleaned;
-  }
   return cleaned;
 }
 
@@ -47,9 +38,9 @@ interface LoginResponse {
   user?: {
     id: string;
     phone?: string;
-    email?: string;
     name?: string;
     role?: string;
+    needs_password_change?: boolean;
   };
 }
 
@@ -66,9 +57,9 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       );
     }
 
-    if (password.length < 6) {
+    if (password.length < 4) {
       return NextResponse.json(
-        { ok: false, error: "كلمة المرور قصيرة جداً (6 أحرف على الأقل)" },
+        { ok: false, error: "كلمة المرور قصيرة جداً" },
         { status: 400 }
       );
     }
@@ -77,63 +68,55 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     const adminClient = getAdminClient();
 
     // 1. البحث عن المستخدم في auth.users عبر Admin API
-    const userSearch = await adminClient.auth.admin.listUsers({
+    const { data: usersData, error: listError } = await adminClient.auth.admin.listUsers({
       page: 1,
       perPage: 1000,
     });
 
-    if (userSearch.error) {
-      console.error("Admin user search failed:", userSearch.error);
+    if (listError) {
+      console.error("Admin user search failed:", listError);
       return NextResponse.json(
         { ok: false, error: "تعذّر البحث عن المستخدم" },
         { status: 500 }
       );
     }
 
-    // ابحث عن المستخدم برقم الهاتف (مطابقة مرنة)
-    const targetUser = userSearch.data.users.find((u) => {
+    const targetUser = usersData.users.find((u) => {
       if (!u.phone) return false;
       const userPhone = u.phone.replace(/^\+/, "");
       const inputPhone = normalizedPhone.replace(/^\+/, "");
       return (
         u.phone === normalizedPhone ||
         userPhone === inputPhone ||
-        userPhone === inputPhone.replace(/^\+2/, "") ||
-        u.phone === "+" + inputPhone
+        userPhone === inputPhone.replace(/^\+2/, "")
       );
     });
 
     if (!targetUser) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "لا يوجد حساب أدمن مرتبط بهذا الرقم. تواصل مع المشرف الرئيسي.",
-        },
+        { ok: false, error: "لا يوجد حساب أدمن بهذا الرقم" },
         { status: 404 }
       );
     }
 
     if (!targetUser.email) {
       return NextResponse.json(
-        { ok: false, error: "حساب الأدمن غير مُهيّأ بشكل صحيح (لا يوجد email داخلي)" },
+        { ok: false, error: "حساب الأدمن غير مُهيّأ بشكل صحيح" },
         { status: 500 }
       );
     }
 
-    // 2. تحقق أن المستخدم موجود في team_members (admin verification)
+    // 2. التحقق من team_members
     const { data: teamMember, error: teamError } = await adminClient
       .from("team_members")
-      .select("id, name, role")
+      .select("id, name, role, permissions")
       .eq("user_id", targetUser.id)
       .single();
 
     if (teamError || !teamMember) {
-      console.warn(`User ${targetUser.id} (${targetUser.phone}) is not in team_members table`);
+      console.warn(`User ${targetUser.id} not in team_members`);
       return NextResponse.json(
-        {
-          ok: false,
-          error: "هذا الحساب ليس لديه صلاحيات أدمن. تواصل مع المشرف الرئيسي.",
-        },
+        { ok: false, error: "هذا الحساب ليس لديه صلاحيات أدمن" },
         { status: 403 }
       );
     }
@@ -151,7 +134,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
               cookieStore.set(name, value, options as any)
             );
           } catch {
-            // called from Server Component — ignore
+            // ignore
           }
         },
       },
@@ -164,33 +147,32 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       });
 
     if (signInError || !signInData.session) {
+      const errorMsg = signInError?.message === "Invalid login credentials"
+        ? "كلمة المرور غير صحيحة"
+        : signInError?.message || "فشل تسجيل الدخول";
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            signInError?.message === "Invalid login credentials"
-              ? "كلمة المرور غير صحيحة"
-              : signInError?.message || "فشل تسجيل الدخول",
-        },
+        { ok: false, error: errorMsg },
         { status: 401 }
       );
     }
 
-    // 4. نجاح! أرجع بيانات المستخدم (بدون توكن حساس)
+    // 4. النجاح
+    const needsPasswordChange = targetUser.user_metadata?.needs_password_change === true;
+
     return NextResponse.json({
       ok: true,
       user: {
         id: signInData.user.id,
         phone: signInData.user.phone || undefined,
-        email: undefined, // لا نُرجع الـ email الداخلي للعميل
         name: teamMember.name,
         role: teamMember.role,
+        needs_password_change: needsPasswordChange,
       },
     });
   } catch (error: any) {
     console.error("Admin login error:", error);
     return NextResponse.json(
-      { ok: false, error: "حدث خطأ داخلي. حاول مرة أخرى." },
+      { ok: false, error: "حدث خطأ داخلي: " + error.message },
       { status: 500 }
     );
   }

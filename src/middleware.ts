@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // ==========================================
-// Middleware - حماية صفحات /admin ومسارات /api/admin
+// Middleware - حماية صفحات /admin و APIs
 // ==========================================
 
 const SUPABASE_URL =
@@ -19,12 +19,6 @@ const PUBLIC_PATHS = [
   "/admin/login",
   "/api/admin/login",
   "/api/admin/health",
-  "/api/admin/setup-otp",
-  "/api/admin/otp/send",
-  "/api/admin/otp/verify",
-  "/api/admin/firebase/verify",
-  "/api/admin/firebase/setup",
-  "/api/admin/firebase/config",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -47,9 +41,7 @@ export async function middleware(request: NextRequest) {
             value: c.value,
           }));
         },
-        setAll() {
-          // لا نعدّل الكوكيز في الـ middleware - يعتمد على client-side auth
-        },
+        setAll() {},
       },
     });
 
@@ -64,8 +56,6 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
       }
     } catch (err) {
-      // في حالة فشل التحقق، اسمح بالمرور (الصفحة ستتعامل مع التحقق)
-      // هذا يمنع توقف التطبيق عند انقطاع Supabase
       console.error("Middleware auth check failed:", err);
     }
   }

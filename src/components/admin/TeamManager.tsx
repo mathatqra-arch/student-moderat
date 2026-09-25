@@ -16,8 +16,9 @@ import {
   EyeOff,
   Shield,
   X,
+  Check,
+  Lock,
 } from "lucide-react";
-import { TeamMember } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -26,87 +27,143 @@ interface AdminUser {
   id: string;
   phone?: string;
   email?: string;
+  name?: string;
+  role?: string;
+  permissions?: Permissions;
+  team_member_id?: string;
   created_at: string;
+  last_sign_in_at?: string;
 }
 
-interface TeamMemberWithPhone extends TeamMember {
-  phone?: string;
+interface Permissions {
+  inquiries: { view: boolean; reply: boolean; delete: boolean };
+  announcements: { view: boolean; create: boolean; edit: boolean; delete: boolean };
+  tasks: { view: boolean; create: boolean; edit: boolean; delete: boolean };
+  team: { view: boolean; create: boolean; edit: boolean; delete: boolean };
+  api_keys: { view: boolean; create: boolean; delete: boolean };
+  mcp: { view: boolean; test: boolean };
+  settings: { view: boolean; edit: boolean };
 }
+
+const DEFAULT_PERMISSIONS: Permissions = {
+  inquiries: { view: true, reply: true, delete: false },
+  announcements: { view: true, create: true, edit: true, delete: false },
+  tasks: { view: true, create: true, edit: true, delete: false },
+  team: { view: true, create: false, edit: false, delete: false },
+  api_keys: { view: false, create: false, delete: false },
+  mcp: { view: false, test: false },
+  settings: { view: false, edit: false },
+};
+
+const PERMISSION_LABELS: Record<string, { label: string; actions: { key: string; label: string }[] }> = {
+  inquiries: {
+    label: "الاستفسارات",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "reply", label: "رد" },
+      { key: "delete", label: "حذف" },
+    ],
+  },
+  announcements: {
+    label: "الإعلانات",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "create", label: "إنشاء" },
+      { key: "edit", label: "تعديل" },
+      { key: "delete", label: "حذف" },
+    ],
+  },
+  tasks: {
+    label: "التكليفات",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "create", label: "إنشاء" },
+      { key: "edit", label: "تعديل" },
+      { key: "delete", label: "حذف" },
+    ],
+  },
+  team: {
+    label: "الفريق",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "create", label: "إضافة" },
+      { key: "edit", label: "تعديل" },
+      { key: "delete", label: "حذف" },
+    ],
+  },
+  api_keys: {
+    label: "مفاتيح API",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "create", label: "إنشاء" },
+      { key: "delete", label: "حذف" },
+    ],
+  },
+  mcp: {
+    label: "خادم MCP",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "test", label: "اختبار" },
+    ],
+  },
+  settings: {
+    label: "الإعدادات",
+    actions: [
+      { key: "view", label: "عرض" },
+      { key: "edit", label: "تعديل" },
+    ],
+  },
+};
 
 export default function TeamManager() {
-  const [team, setTeam] = useState<TeamMemberWithPhone[]>([]);
-  const [adminUsers, setAdminUsers] = useState<Map<string, AdminUser>>(new Map());
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal states
+  // Modals
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState<TeamMemberWithPhone | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState<AdminUser | null>(null);
+  const [showPermissionsModal, setShowPermissionsModal] = useState<AdminUser | null>(null);
 
-  // New admin form
-  const [newAdminName, setNewAdminName] = useState("");
-  const [newAdminPhone, setNewAdminPhone] = useState("");
-  const [newAdminRole, setNewAdminRole] = useState<"leader" | "assistant">("assistant");
-  const [newAdminPassword, setNewAdminPassword] = useState("");
+  // Add form
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newRole, setNewRole] = useState<"leader" | "assistant">("assistant");
+  const [newPassword, setNewPassword] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Change password form
-  const [newPassword, setNewPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
+  // Password form
+  const [editPassword, setEditPassword] = useState("");
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Permissions form
+  const [editPermissions, setEditPermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
+  const [savingPermissions, setSavingPermissions] = useState(false);
+
   useEffect(() => {
-    fetchTeam();
+    fetchUsers();
   }, []);
 
-  const fetchTeam = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { data, error: queryError } = await supabase
-        .from("team_members")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (queryError) throw queryError;
-
-      // جلب بيانات المستخدمين (phone) من auth.users عبر Admin API (server-side)
-      // نحتاج endpoint server-side لأن العميل لا يستطيع الوصول لـ auth.users
-      const usersMap = new Map<string, AdminUser>();
-      try {
-        const res = await fetch("/api/admin/users");
-        if (res.ok) {
-          const usersData = await res.json();
-          for (const u of usersData.users || []) {
-            usersMap.set(u.id, u);
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to fetch admin users:", e);
-      }
-
-      setAdminUsers(usersMap);
-
-      // دمج بيانات team_members مع phone من auth.users
-      const merged: TeamMemberWithPhone[] = (data || []).map((tm: TeamMember) => ({
-        ...tm,
-        phone: usersMap.get(tm.user_id)?.phone,
-      }));
-
-      setTeam(merged);
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setUsers(data.users || []);
     } catch (err: any) {
-      console.error("Fetch team error:", err);
-      setError(err.message || "تعذّر تحميل قائمة الفريق");
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddAdmin = async (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAdminName.trim() || !newAdminPhone.trim()) return;
+    if (!newName.trim() || !newPhone.trim() || !newPassword.trim()) return;
 
     setCreating(true);
     setError(null);
@@ -115,31 +172,22 @@ export default function TeamManager() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newAdminName.trim(),
-          phone: newAdminPhone.trim(),
-          role: newAdminRole,
-          password: newAdminPassword || undefined,
+          name: newName.trim(),
+          phone: newPhone.trim(),
+          role: newRole,
+          password: newPassword,
         }),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "فشل إنشاء الحساب");
+      if (!res.ok) throw new Error(data.error);
 
-      setActionMsg(
-        `تم إنشاء حساب الأدمن بنجاح! ${
-          data.password ? `كلمة المرور: ${data.password}` : ""
-        }`
-      );
-      setTimeout(() => setActionMsg(null), 8000);
-
-      // إعادة تعيين النموذج
-      setNewAdminName("");
-      setNewAdminPhone("");
-      setNewAdminPassword("");
-      setNewAdminRole("assistant");
+      setActionMsg("تم إنشاء الحساب بنجاح! ✅");
+      setTimeout(() => setActionMsg(null), 3000);
+      setNewName("");
+      setNewPhone("");
+      setNewPassword("");
       setShowAddModal(false);
-
-      fetchTeam();
+      fetchUsers();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -149,8 +197,8 @@ export default function TeamManager() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!showPasswordModal || !newPassword) return;
-    if (newPassword.length < 6) {
+    if (!showPasswordModal || !editPassword) return;
+    if (editPassword.length < 6) {
       setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
       return;
     }
@@ -161,20 +209,15 @@ export default function TeamManager() {
       const res = await fetch("/api/admin/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: showPasswordModal.user_id,
-          password: newPassword,
-        }),
+        body: JSON.stringify({ user_id: showPasswordModal.id, password: editPassword }),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "فشل تغيير كلمة المرور");
+      if (!res.ok) throw new Error(data.error);
 
-      setActionMsg(`تم تغيير كلمة المرور لـ ${showPasswordModal.name} بنجاح ✅`);
-      setTimeout(() => setActionMsg(null), 4000);
-
+      setActionMsg(`تم تغيير كلمة مرور ${showPasswordModal.name} بنجاح ✅`);
+      setTimeout(() => setActionMsg(null), 3000);
       setShowPasswordModal(null);
-      setNewPassword("");
+      setEditPassword("");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -182,83 +225,112 @@ export default function TeamManager() {
     }
   };
 
-  const handleDeleteMember = async (id: string, userId: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المشرف نهائياً؟ سيتم حذف حسابه من المصادقة أيضاً.")) return;
+  const handleSavePermissions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPermissionsModal) return;
+
+    setSavingPermissions(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: showPermissionsModal.id,
+          permissions: editPermissions,
+          role: showPermissionsModal.role,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setActionMsg(`تم تحديث أذونات ${showPermissionsModal.name} بنجاح ✅`);
+      setTimeout(() => setActionMsg(null), 3000);
+      setShowPermissionsModal(null);
+      fetchUsers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+
+  const handleDelete = async (user: AdminUser) => {
+    if (!confirm(`هل أنت متأكد من حذف ${user.name || user.phone}؟ لا يمكن التراجع.`)) return;
 
     try {
       const res = await fetch("/api/admin/users", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({ user_id: user.id }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "فشل الحذف");
-      }
-
-      setTeam(team.filter((m) => m.id !== id));
-      setActionMsg("تم حذف المشرف نهائياً.");
+      setActionMsg("تم حذف الحساب ✅");
       setTimeout(() => setActionMsg(null), 3000);
+      fetchUsers();
     } catch (err: any) {
       setError(err.message);
     }
   };
 
-  const handleCleanOldData = async () => {
-    if (!confirm("هل تريد أرشفة وحذف الاستفسارات المنتهية (أكثر من 30 يوماً)؟")) return;
+  const openPermissionsModal = (user: AdminUser) => {
+    setShowPermissionsModal(user);
+    setEditPermissions(user.permissions || DEFAULT_PERMISSIONS);
+  };
 
-    setError(null);
-    try {
-      const supabase = createClient();
-      const { data, error: rpcError } = await supabase.rpc("clean_old_inquiries", { p_days: 30 });
-      if (rpcError) throw rpcError;
-
-      setActionMsg(`تم تنظيف وأرشفة ${data || 0} سجل قديم. 🧹`);
-      setTimeout(() => setActionMsg(null), 4000);
-    } catch (err: any) {
-      setError(`فشل التنظيف: ${err.message}`);
-    }
+  const togglePermission = (resource: string, action: string) => {
+    setEditPermissions((prev) => {
+      const resourceKey = resource as keyof Permissions;
+      const currentResource = prev[resourceKey] as any;
+      return {
+        ...prev,
+        [resource]: {
+          ...currentResource,
+          [action]: !currentResource[action],
+        },
+      };
+    });
   };
 
   return (
     <div className="space-y-6">
       {actionMsg && (
-        <div className="bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-xl text-center">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl text-center animate-fade-in">
           {actionMsg}
         </div>
       )}
       {error && (
-        <div className="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl text-center">
+        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs p-3 rounded-xl text-center">
           {error}
         </div>
       )}
 
-      {/* Team Members List */}
+      {/* Users List */}
       <Card className="space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+        <div className="flex items-center justify-between pb-3 border-b border-[rgb(var(--border))]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+            <div className="p-2 rounded-xl bg-brand-600/20 text-brand-500 border border-brand-500/30">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-gray-100 text-base">إدارة الفريق والمشرفين</h3>
-              <p className="text-xs text-gray-400">المشرفون المسؤولون عن متابعة الطلاب</p>
+              <h3 className="font-bold text-base">إدارة الفريق والأذونات</h3>
+              <p className="text-xs text-[rgb(var(--text-muted))]">المشرفون وصلاحياتهم</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowAddModal(true)}
-              className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-blue-600/20"
+              className="px-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-brand-600/20"
             >
               <UserPlus className="w-4 h-4" />
-              <span className="hidden sm:inline">إضافة أدمن جديد</span>
+              <span className="hidden sm:inline">إضافة أدمن</span>
             </button>
             <button
-              onClick={fetchTeam}
+              onClick={fetchUsers}
               disabled={loading}
-              className="p-2 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition border border-gray-700 disabled:opacity-50"
-              title="تحديث"
+              className="p-2 rounded-lg bg-[rgb(var(--surface-subtle))] hover:bg-[rgb(var(--surface-muted))] transition border border-[rgb(var(--border))] disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </button>
@@ -266,161 +338,160 @@ export default function TeamManager() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8 text-gray-400 gap-2 text-sm">
+          <div className="flex items-center justify-center py-8 text-[rgb(var(--text-muted))] gap-2 text-sm">
             <Loader2 className="w-5 h-5 animate-spin" />
             <span>جاري التحميل...</span>
           </div>
-        ) : team.length === 0 ? (
-          <p className="text-xs text-gray-500 py-6 text-center">
-            لا يوجد مشرفون بعد. اضغط "إضافة أدمن جديد" لإنشاء أول حساب.
+        ) : users.filter((u) => u.team_member_id).length === 0 ? (
+          <p className="text-xs text-[rgb(var(--text-muted))] py-6 text-center">
+            لا يوجد مشرفون بعد. اضغط "إضافة أدمن" لإنشاء أول حساب.
           </p>
         ) : (
           <div className="space-y-2">
-            {team.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-gray-900/60 border border-gray-800 hover:border-gray-700 transition gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-9 h-9 rounded-xl bg-gray-800 text-gray-200 border border-gray-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {member.name.charAt(0)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-200 text-sm truncate">{member.name}</p>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                      {member.phone && (
-                        <span className="flex items-center gap-1 font-mono">
-                          <Phone className="w-3 h-3" />
-                          <span dir="ltr">{member.phone}</span>
+            {users
+              .filter((u) => u.team_member_id)
+              .map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center justify-between p-3 rounded-xl bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] hover:border-[rgb(var(--border-subtle))] transition gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                      user.role === "leader"
+                        ? "bg-purple-600/20 text-purple-500 border border-purple-500/30"
+                        : "bg-brand-600/15 text-brand-500 border border-brand-500/30"
+                    }`}>
+                      {user.name?.charAt(0) || user.phone?.charAt(0) || "?"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm truncate">{user.name || "بدون اسم"}</p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
+                          user.role === "leader"
+                            ? "bg-purple-500/10 text-purple-500 border-purple-500/30"
+                            : "bg-brand-500/10 text-brand-500 border-brand-500/30"
+                        }`}>
+                          {user.role === "leader" ? "رئيسي" : "مساعد"}
                         </span>
-                      )}
-                      <span>•</span>
-                      <span>
-                        {member.role === "leader" ? "ليدر رئيسي" : "مساعد"}
-                      </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-[rgb(var(--text-muted))]">
+                        {user.phone && (
+                          <span className="flex items-center gap-1 font-mono">
+                            <Phone className="w-3 h-3" />
+                            <span dir="ltr">{user.phone}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
-                      member.role === "leader"
-                        ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
-                        : "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                    }`}
-                  >
-                    {member.role === "leader" ? "رئيسي" : "مساعد"}
-                  </span>
-                  <button
-                    onClick={() => setShowPasswordModal(member)}
-                    title="تغيير كلمة المرور"
-                    className="p-1.5 rounded-lg bg-amber-950/40 hover:bg-amber-900/70 text-amber-300 transition border border-amber-900/50"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteMember(member.id, member.user_id)}
-                    title="حذف المشرف"
-                    className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/70 text-rose-300 transition border border-rose-900/50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => setShowPasswordModal(user)}
+                      title="تغيير كلمة المرور"
+                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition border border-amber-500/30"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => openPermissionsModal(user)}
+                      title="تعديل الأذونات"
+                      className="p-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 transition border border-purple-500/30"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(user)}
+                      title="حذف"
+                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition border border-rose-500/30"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </Card>
 
-      {/* Add Admin Modal */}
+      {/* Add User Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+          <div className="bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-brand-600/20 text-brand-500 border border-brand-500/30 flex items-center justify-center">
                   <Shield className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-white text-base">إضافة أدمن جديد</h3>
+                <h3 className="font-bold text-base">إضافة أدمن جديد</h3>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="p-1 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition"
+                className="p-1 rounded-lg hover:bg-[rgb(var(--surface-subtle))] text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddAdmin} className="space-y-3">
+            <form onSubmit={handleAddUser} className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">الاسم الكامل *</label>
+                <label className="text-xs font-medium mb-1 block">الاسم الكامل *</label>
                 <input
                   type="text"
                   placeholder="مثال: أحمد محمد"
-                  value={newAdminName}
-                  onChange={(e) => setNewAdminName(e.target.value)}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
                   required
                   autoFocus
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block flex items-center gap-1.5">
-                  <Phone className="w-3 h-3 text-blue-400" />
-                  رقم الهاتف *
-                </label>
+                <label className="text-xs font-medium mb-1 block">رقم الهاتف *</label>
                 <input
                   type="tel"
                   placeholder="01012345678"
-                  value={newAdminPhone}
-                  onChange={(e) => setNewAdminPhone(e.target.value)}
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
                   required
                   dir="ltr"
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 text-left font-mono"
+                  className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 text-left font-mono"
                 />
-                <p className="text-[10px] text-gray-500 mt-1">11 رقماً مصرياً يبدأ بـ 01</p>
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">الدور</label>
+                <label className="text-xs font-medium mb-1 block">كلمة المرور *</label>
+                <input
+                  type="text"
+                  placeholder="6 أحرف على الأقل"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1 block">الدور</label>
                 <select
-                  value={newAdminRole}
-                  onChange={(e) => setNewAdminRole(e.target.value as "leader" | "assistant")}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as "leader" | "assistant")}
+                  className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500"
                 >
-                  <option value="assistant">مشرف مساعد (Assistant)</option>
-                  <option value="leader">ليدر رئيسي (Leader)</option>
+                  <option value="assistant">مشرف مساعد</option>
+                  <option value="leader">ليدر رئيسي (كل الصلاحيات)</option>
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">
-                  كلمة المرور (اختياري)
-                </label>
-                <input
-                  type="text"
-                  placeholder="(توليد تلقائي إن تُرك فارغاً)"
-                  value={newAdminPassword}
-                  onChange={(e) => setNewAdminPassword(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 font-mono"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">6 أحرف على الأقل</p>
-              </div>
-
               <div className="flex gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1"
-                >
+                <Button type="button" variant="ghost" onClick={() => setShowAddModal(false)} className="flex-1">
                   إلغاء
                 </Button>
                 <Button type="submit" isLoading={creating} className="flex-1">
                   <UserPlus className="w-4 h-4" />
-                  إنشاء الحساب
+                  إنشاء
                 </Button>
               </div>
             </form>
@@ -428,58 +499,56 @@ export default function TeamManager() {
         </div>
       )}
 
-      {/* Change Password Modal */}
+      {/* Password Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+          <div className="bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-amber-600/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-amber-600/20 text-amber-500 border border-amber-500/30 flex items-center justify-center">
                   <Key className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-white text-base">تغيير كلمة المرور</h3>
+                <h3 className="font-bold text-base">تغيير كلمة المرور</h3>
               </div>
               <button
                 onClick={() => {
                   setShowPasswordModal(null);
-                  setNewPassword("");
+                  setEditPassword("");
                 }}
-                className="p-1 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition"
+                className="p-1 rounded-lg hover:bg-[rgb(var(--surface-subtle))] text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-gray-400">
-              تغيير كلمة مرور: <span className="text-white font-semibold">{showPasswordModal.name}</span>
+            <p className="text-xs text-[rgb(var(--text-muted))]">
+              تغيير كلمة مرور: <span className="font-semibold text-[rgb(var(--text))]">{showPasswordModal.name}</span>
               {showPasswordModal.phone && (
-                <span className="block mt-1 font-mono text-[11px]" dir="ltr">
-                  {showPasswordModal.phone}
-                </span>
+                <span className="block mt-1 font-mono" dir="ltr">{showPasswordModal.phone}</span>
               )}
             </p>
 
             <form onSubmit={handleChangePassword} className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">كلمة المرور الجديدة</label>
+                <label className="text-xs font-medium mb-1 block">كلمة المرور الجديدة</label>
                 <div className="relative">
                   <input
-                    type={showNewPassword ? "text" : "password"}
+                    type={showEditPassword ? "text" : "password"}
                     placeholder="6 أحرف على الأقل"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
                     required
                     autoFocus
                     minLength={6}
-                    className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-gray-100 focus:outline-none focus:border-amber-500 font-mono"
+                    className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:border-amber-500 font-mono"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300"
+                    onClick={() => setShowEditPassword(!showEditPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
                     tabIndex={-1}
                   >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -490,7 +559,7 @@ export default function TeamManager() {
                   variant="ghost"
                   onClick={() => {
                     setShowPasswordModal(null);
-                    setNewPassword("");
+                    setEditPassword("");
                   }}
                   className="flex-1"
                 >
@@ -498,7 +567,7 @@ export default function TeamManager() {
                 </Button>
                 <Button type="submit" isLoading={changingPassword} className="flex-1">
                   <Key className="w-4 h-4" />
-                  حفظ كلمة المرور
+                  حفظ
                 </Button>
               </div>
             </form>
@@ -506,66 +575,129 @@ export default function TeamManager() {
         </div>
       )}
 
-      {/* Housekeeping & Maintenance */}
-      <Card className="space-y-3 bg-rose-950/10 border-rose-900/30">
-        <div className="flex items-center gap-2.5 pb-2 border-b border-rose-900/30">
-          <div className="p-2 rounded-xl bg-rose-600/20 text-rose-400 border border-rose-500/30">
-            <Database className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-bold text-rose-300 text-base">صيانة البيانات والأرشفة</h3>
-            <p className="text-xs text-gray-400">حماية حدود التخزين المجاني في Supabase (500MB)</p>
+      {/* Permissions Modal */}
+      {showPermissionsModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-2xl p-6 max-w-2xl w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between sticky top-0 bg-[rgb(var(--surface))] pb-3 border-b border-[rgb(var(--border))] z-10">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-purple-600/20 text-purple-500 border border-purple-500/30 flex items-center justify-center">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">إدارة الأذونات</h3>
+                  <p className="text-xs text-[rgb(var(--text-muted))]">{showPermissionsModal.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPermissionsModal(null)}
+                className="p-1 rounded-lg hover:bg-[rgb(var(--surface-subtle))] text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {showPermissionsModal.role === "leader" && (
+              <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-xl text-xs text-purple-500">
+                <Shield className="w-4 h-4 inline ml-1" />
+                هذا المستخدم leader — لديه كل الصلاحيات تلقائياً
+              </div>
+            )}
+
+            <form onSubmit={handleSavePermissions} className="space-y-3">
+              {Object.entries(PERMISSION_LABELS).map(([resource, config]) => (
+                <div key={resource} className="bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl p-3">
+                  <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                    <Lock className="w-3 h-3 text-brand-500" />
+                    {config.label}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {config.actions.map((action) => {
+                      const isChecked = showPermissionsModal.role === "leader"
+                        ? true
+                        : (editPermissions[resource as keyof Permissions] as any)?.[action.key] || false;
+                      return (
+                        <label
+                          key={action.key}
+                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition border ${
+                            isChecked
+                              ? "bg-emerald-500/10 border-emerald-500/30"
+                              : "bg-[rgb(var(--surface))] border-[rgb(var(--border))]"
+                          } ${showPermissionsModal.role === "leader" ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => togglePermission(resource, action.key)}
+                            disabled={showPermissionsModal.role === "leader"}
+                            className="rounded"
+                          />
+                          <span className="text-[11px]">{action.label}</span>
+                          {isChecked && (
+                            <Check className="w-3 h-3 text-emerald-500 mr-auto" />
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex gap-2 pt-2 sticky bottom-0 bg-[rgb(var(--surface))]">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowPermissionsModal(null)}
+                  className="flex-1"
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  type="submit"
+                  isLoading={savingPermissions}
+                  disabled={showPermissionsModal.role === "leader"}
+                  className="flex-1"
+                >
+                  <Shield className="w-4 h-4" />
+                  حفظ الأذونات
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
 
-        <p className="text-xs text-gray-400 leading-relaxed">
-          أرشفة الاستفسارات المنتهية الأقدم من 30 يوماً عبر دالة{" "}
-          <code className="text-rose-300 bg-rose-950/40 px-1.5 py-0.5 rounded">clean_old_inquiries</code>.
-        </p>
-
-        <button
-          onClick={handleCleanOldData}
-          className="px-4 py-2.5 rounded-xl bg-rose-900/40 hover:bg-rose-900/80 text-rose-200 border border-rose-500/30 text-xs font-semibold flex items-center gap-2 transition w-full justify-center"
-        >
-          <Trash2 className="w-4 h-4 text-rose-400" />
-          <span>تنظيف وأرشفة الاستفسارات القديمة</span>
-        </button>
-      </Card>
-
-      {/* MCP Server Status */}
+      {/* MCP Server Status (compact) */}
       <Card className="space-y-3 bg-purple-950/10 border-purple-900/30">
         <div className="flex items-center gap-2.5 pb-2 border-b border-purple-900/30">
-          <div className="p-2 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+          <div className="p-2 rounded-xl bg-purple-600/20 text-purple-500 border border-purple-500/30">
             <Server className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-purple-300 text-base">حالة خادم MCP</h3>
-            <p className="text-xs text-gray-400">خدمة الذكاء الاصطناعي المرتبطة بـ ChatGPT</p>
+            <h3 className="font-bold text-purple-300 text-base">خادم MCP</h3>
+            <p className="text-xs text-[rgb(var(--text-muted))]">حالة الخدمة والروابط</p>
           </div>
         </div>
 
-        <div className="space-y-2 text-xs">
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900/60 border border-gray-800">
-            <span className="text-gray-400">Edge Function (Supabase):</span>
-            <code className="text-purple-300 font-mono text-[10px] truncate max-w-[200px]">
-              /functions/v1/mcp
-            </code>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <div className="p-2.5 rounded-xl bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))]">
+            <p className="text-[10px] text-[rgb(var(--text-muted))] mb-1">Cloudflare</p>
+            <code className="text-purple-400 font-mono text-[10px]">/api/mcp</code>
           </div>
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900/60 border border-gray-800">
-            <span className="text-gray-400">HTTP Route (Next.js):</span>
-            <code className="text-purple-300 font-mono text-[10px]">/api/mcp</code>
+          <div className="p-2.5 rounded-xl bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))]">
+            <p className="text-[10px] text-[rgb(var(--text-muted))] mb-1">Supabase</p>
+            <code className="text-purple-400 font-mono text-[10px]">/functions/v1/mcp</code>
           </div>
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900/60 border border-gray-800">
-            <span className="text-gray-400">Stdio (Local):</span>
-            <code className="text-purple-300 font-mono text-[10px]">npm run mcp:start</code>
+          <div className="p-2.5 rounded-xl bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))]">
+            <p className="text-[10px] text-[rgb(var(--text-muted))] mb-1">Local stdio</p>
+            <code className="text-purple-400 font-mono text-[10px]">npm run mcp:start</code>
           </div>
         </div>
 
         <div className="flex items-start gap-2 text-[11px] text-purple-200/70 bg-purple-950/30 p-2.5 rounded-xl border border-purple-500/20">
           <Sparkles className="w-3.5 h-3.5 text-purple-400 mt-0.5 flex-shrink-0" />
           <span>
-            خادم MCP يتيح لـ ChatGPT إدارة الاستفسارات والإعلانات مباشرة. أنشئ مفتاح API من قسم "مفاتيح API &
-            ChatGPT" واربطه في ChatGPT Custom Actions.
+            خادم MCP لربط ChatGPT/Claude. أنشئ مفتاح API من تبويب "مفاتيح API".
           </span>
         </div>
       </Card>

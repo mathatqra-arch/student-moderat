@@ -112,7 +112,6 @@ function AdminLoginForm() {
     setOtpCode(null);
     setQuotaWarning(null);
 
-    // معلومات تشخيصية
     console.log("[OTP] Starting send flow", {
       phone,
       firebaseReady,
@@ -121,7 +120,7 @@ function AdminLoginForm() {
     });
 
     try {
-      // 1. محاولة Firebase Phone Auth (SMS حقيقي)
+      // 1. محاولة Firebase Phone Auth (SMS حقيقي) — الإنتاج
       if (firebaseReady && firebaseVerifier) {
         try {
           const normalizedPhone = normalizePhoneForFirebase(phone);
@@ -142,85 +141,49 @@ function AdminLoginForm() {
         } catch (err: any) {
           console.error("[OTP] ❌ Firebase failed:", err.code, err.message);
 
-          // تشخيص السبب وإظهار رسالة مناسبة
+          // تشخيص السبب وإظهار رسالة خطأ واضحة (بدون عرض الكود)
           if (err.code === "auth/quota-exceeded") {
-            setQuotaWarning(
-              "تم تجاوز حصة Firebase اليومية (10 SMS). سنعرض الرمز هنا كحل بديل — تواصل مع المشرف لزيادة الحصة."
+            setErrorMsg(
+              "تم تجاوز الحصة اليومية من Firebase (10 SMS). حاول مرة أخرى غداً أو تواصل مع المشرف لرفع الحصة."
             );
           } else if (err.code === "auth/invalid-phone-number") {
             setErrorMsg("رقم الهاتف غير صالح. الصيغة الصحيحة: +201012345678");
-            setLoading(false);
-            return;
           } else if (err.code === "auth/too-many-requests") {
-            setErrorMsg("محاولات كثيرة من هذا الـ IP. انتظر 5 دقائق.");
-            setLoading(false);
-            return;
+            setErrorMsg("محاولات كثيرة من هذا الـ IP. انتظر 5 دقائق ثم حاول مرة أخرى.");
           } else if (err.code === "auth/captcha-check-failed") {
-            setQuotaWarning(
-              "reCAPTCHA فشل التحقق. حاول مرة أخرى — سنعرض الرمز هنا كحل بديل."
-            );
+            setErrorMsg("تعذّر التحقق من reCAPTCHA. حدّث الصفحة وحاول مرة أخرى.");
           } else if (err.code === "auth/operation-not-allowed") {
-            setQuotaWarning(
-              "⚠️ Phone Auth غير مُفعّل في Firebase Console. افتح: https://console.firebase.google.com/project/student-8f889/authentication/providers — فعّل Phone."
+            setErrorMsg(
+              "خدمة Phone Auth غير مُفعّلة في Firebase Console. تواصل مع المشرف."
             );
           } else if (err.code === "auth/api-key-not-valid") {
-            setErrorMsg("Firebase API Key غير صالح. تحقق من NEXT_PUBLIC_FIREBASE_API_KEY.");
-            setLoading(false);
-            return;
+            setErrorMsg("إعدادات Firebase غير صحيحة (API Key). تواصل مع المشرف.");
           } else if (err.code === "auth/invalid-verification-code") {
-            setErrorMsg("رمز التحقق غير صحيح أو منتهي. حاول مرة أخرى.");
-            setLoading(false);
-            return;
+            setErrorMsg("رمز التحقق غير صحيح أو منتهي. اطلب رمزاً جديداً.");
           } else if (
             err.message?.includes("auth/invalid-api-key") ||
             err.message?.includes("XMLHttpRequest")
           ) {
             setErrorMsg(
-              "Firebase API Key غير صالح أو Domain غير مصرّح به. تحقق من إعدادات Firebase."
+              "تعذّر الاتصال بـ Firebase. تأكد من إضافة domain لهذا الموقع في Firebase Console."
             );
-            setLoading(false);
-            return;
           } else {
-            setQuotaWarning(
-              `Firebase فشل (${err.code || "unknown"}): ${err.message || ""} — سنعرض الرمز هنا كحل بديل.`
+            setErrorMsg(
+              `تعذّر إرسال الرمز (${err.code || "غير معروف"}). حاول مرة أخرى لاحقاً.`
             );
           }
-          // نواصل للـ fallback
+          // ❌ ما عدناش بنعمل fallback لـ screen OTP
+          // المستخدم لازم يشوف الخطأ ويحاول مرة أخرى
         }
       } else if (firebaseReady && !firebaseVerifier) {
         console.warn("[OTP] Firebase configured but client SDK failed to load");
-        setQuotaWarning(
-          "تعذّر تحميل Firebase client SDK. سنعرض الرمز هنا كحل بديل."
+        setErrorMsg("تعذّر تحميل Firebase. حدّث الصفحة وحاول مرة أخرى.");
+      } else {
+        // Firebase غير مُهيّأ — لا يمكن إرسال SMS
+        setErrorMsg(
+          "نظام المصادقة غير مُهيّأ بالكامل. تواصل مع المشرف لتفعيل Firebase Phone Auth."
         );
       }
-
-      // 2. Fallback: OTP على الشاشة
-      console.log("[OTP] Falling back to screen OTP");
-      const res = await fetch("/api/admin/otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 429 && data.retry_after) setRetryAfter(data.retry_after);
-        setErrorMsg(data.error || "فشل إرسال الرمز");
-        setLoading(false);
-        return;
-      }
-
-      setOtpMode("screen");
-      setInfoMsg(
-        quotaWarning ||
-          (data.delivery_method === "sms"
-            ? "تم إرسال الرمز عبر SMS"
-            : "وضع التطوير — الرمز معروض هنا")
-      );
-      if (data.code) setOtpCode(data.code);
-      if (data.user_preview)
-        setUserInfo({ name: data.user_preview.name, role: data.user_preview.role });
-      setStep("code");
     } catch (err: any) {
       console.error("[OTP] ❌ General error:", err);
       setErrorMsg("تعذّر الاتصال بالخادم: " + (err.message || ""));
@@ -416,13 +379,6 @@ function AdminLoginForm() {
           </div>
         )}
 
-        {quotaWarning && (
-          <div className="flex items-start gap-2 p-2.5 rounded-xl text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400">
-            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-            <span>{quotaWarning}</span>
-          </div>
-        )}
-
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 text-[10px] text-[rgb(var(--text-muted))]">
           {[
@@ -541,22 +497,6 @@ function AdminLoginForm() {
         {/* Step 2: Code */}
         {step === "code" && (
           <form onSubmit={handleVerifyCode} className="space-y-4 animate-fade-in">
-            {otpCode && otpMode === "screen" && (
-              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-center space-y-2">
-                <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide">
-                  {quotaWarning ? "حل بديل — الرمز:" : "وضع التطوير — الرمز:"}
-                </p>
-                <p className="text-3xl font-mono font-bold text-amber-500 tracking-[0.5em]">
-                  {otpCode}
-                </p>
-                <p className="text-[10px] text-[rgb(var(--text-subtle))]">
-                  {firebaseReady
-                    ? "Firebase لم يتمكن من إرسال SMS — استخدم هذا الرمز"
-                    : "لتفعيل SMS الحقيقي، أضف Firebase config"}
-                </p>
-              </div>
-            )}
-
             {otpMode === "firebase" && (
               <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl text-center space-y-2">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500/15 mb-1">

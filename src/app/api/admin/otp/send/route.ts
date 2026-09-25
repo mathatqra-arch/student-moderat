@@ -179,33 +179,25 @@ export async function POST(request: Request): Promise<NextResponse<SendResponse>
           process.env.FIREBASE_PRIVATE_KEY)
     );
 
-    // استراتيجية الإنتاج:
-    // - لو Firebase مُهيّأ: نرجع delivery_method = "sms" + code (للـ fallback)
-    //   الـ client بيجرّب Firebase أولاً، لو فشل بيستخدم الـ code ده
-    // - لو Firebase غير مُهيّأ: نرجع delivery_method = "screen_fallback" + code
-    let deliveryMethod: "sms" | "screen_fallback" = "sms";
-    let responseMessage = "تم إرسال رمز التحقق إلى رقمك عبر SMS";
-    let shouldReturnCode = false;
+    // استراتيجية الإنتاج الحقيقي:
+    // - الـ server يخزّن الكود في DB فقط (للتحقق لاحقاً)
+    // - الـ client (browser) بيجرّب Firebase Phone Auth للـ SMS الحقيقي
+    // - لو Firebase فشل → الـ client يعرض رسالة خطأ + يطلب المحاولة مرة أخرى
+    // - ❌ الكود ما بيظهرش للمستخدم أبداً (أمان عالي)
+    const deliveryMethod: "sms" | "screen_fallback" = firebaseConfigured
+      ? "sms"
+      : "screen_fallback";
 
-    if (!firebaseConfigured) {
-      // Firebase غير مُهيّأ — fallback إجباري
-      deliveryMethod = "screen_fallback";
-      responseMessage = "وضع التطوير — الرمز معروض هنا (Firebase غير مُهيّأ)";
-      shouldReturnCode = true;
-    } else {
-      // Firebase مُهيّأ — الـ client هيجرّب Firebase
-      // لكن نرجع الكود للـ fallback (لو Firebase فشل، الـ client يستخدم الكود ده)
-      // الأمان: الكود صالح لمدة 10 دقائق فقط + مرتبط بـ user_id محدد
-      shouldReturnCode = true; // مؤقتاً — عشان الـ fallback يشتغل لين
-      // TODO: في النسخة النهائية، نظهر الكود فقط لو Firebase فشل
-    }
+    const responseMessage = firebaseConfigured
+      ? "تم إرسال رمز التحقق إلى رقمك عبر SMS"
+      : "Firebase غير مُهيّأ. تواصل مع المشرف.";
 
+    // ❌ مفيش code في الاستجابة أبداً — الكود بيتخزّن في DB فقط للتحقق
     return NextResponse.json({
       ok: true,
       message: responseMessage,
       delivery_method: deliveryMethod,
       expires_in: OTP_TTL_MINUTES * 60,
-      ...(shouldReturnCode ? { code } : {}),
       user_preview: {
         name: teamMember.name,
         role: teamMember.role,

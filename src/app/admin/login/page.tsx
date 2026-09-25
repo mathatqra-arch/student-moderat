@@ -61,27 +61,34 @@ function AdminLoginForm() {
   }, []);
 
   // تحميل Firebase client SDK ديناميكياً (browser only)
+  // يجيب الإعدادات من /api/admin/firebase/config لأن process.env مش متاح على Cloudflare runtime
   async function loadFirebaseClient() {
     if (typeof window === "undefined") return;
     try {
+      // 1. جلب الإعدادات من الـ API
+      const configRes = await fetch("/api/admin/firebase/config");
+      const configData = await configRes.json();
+
+      if (!configData.configured || !configData.config) {
+        console.error("[Firebase] Config not available from API");
+        setFirebaseReady(false);
+        return;
+      }
+
+      console.log("[Firebase] Got config from API:", {
+        projectId: configData.config.projectId,
+        apiKeyLength: configData.config.apiKey?.length || 0,
+      });
+
+      // 2. تحميل Firebase SDK
       const { initializeApp, getApps, getApp } = await import("firebase/app");
       const { getAuth, RecaptchaVerifier, signInWithPhoneNumber } = await import("firebase/auth");
 
-      const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      };
-
-      // تجنب إعادة التهيئة
-      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      // 3. تجنب إعادة التهيئة
+      const app = getApps().length === 0 ? initializeApp(configData.config) : getApp();
       const auth = getAuth(app);
 
-      // إنشاء RecaptchaVerifier (invisible)
-      // ملاحظة: v12 يدعم الـ callback + 'size: invisible'
+      // 4. إنشاء RecaptchaVerifier (invisible)
       const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
         callback: (response: any) => {
@@ -97,7 +104,7 @@ function AdminLoginForm() {
         },
       });
 
-      // render لضمان عمل الـ invisible reCAPTCHA
+      // 5. render لضمان عمل الـ invisible reCAPTCHA
       try {
         const widgetId = await verifier.render();
         setRecaptchaWidgetId(widgetId);

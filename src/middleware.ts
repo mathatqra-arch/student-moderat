@@ -24,6 +24,7 @@ const PUBLIC_PATHS = [
   "/api/admin/otp/verify",
   "/api/admin/firebase/verify",
   "/api/admin/firebase/setup",
+  "/api/admin/firebase/config",
 ];
 
 export async function middleware(request: NextRequest) {

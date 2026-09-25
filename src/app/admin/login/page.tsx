@@ -112,44 +112,90 @@ function AdminLoginForm() {
     setOtpCode(null);
     setQuotaWarning(null);
 
+    // معلومات تشخيصية
+    console.log("[OTP] Starting send flow", {
+      phone,
+      firebaseReady,
+      firebaseVerifierReady: Boolean(firebaseVerifier),
+      location: typeof window !== "undefined" ? window.location.origin : "",
+    });
+
     try {
       // 1. محاولة Firebase Phone Auth (SMS حقيقي)
       if (firebaseReady && firebaseVerifier) {
         try {
           const normalizedPhone = normalizePhoneForFirebase(phone);
+          console.log("[OTP] Calling Firebase signInWithPhoneNumber:", normalizedPhone);
+
           const confirmationResult = await firebaseVerifier.signInWithPhoneNumber(
             firebaseVerifier.auth,
             normalizedPhone,
             firebaseVerifier.verifier
           );
 
+          console.log("[OTP] ✅ Firebase SMS sent successfully");
           setOtpMode("firebase");
           setInfoMsg("تم إرسال رمز التحقق إلى رقمك عبر SMS");
           setStep("code");
           (window as any).__firebaseConfirmation = confirmationResult;
           return;
         } catch (err: any) {
-          console.error("Firebase OTP failed:", err);
+          console.error("[OTP] ❌ Firebase failed:", err.code, err.message);
+
+          // تشخيص السبب وإظهار رسالة مناسبة
           if (err.code === "auth/quota-exceeded") {
             setQuotaWarning(
               "تم تجاوز حصة Firebase اليومية (10 SMS). سنعرض الرمز هنا كحل بديل — تواصل مع المشرف لزيادة الحصة."
             );
           } else if (err.code === "auth/invalid-phone-number") {
-            setErrorMsg("رقم الهاتف غير صالح. تحقق من الصيغة.");
+            setErrorMsg("رقم الهاتف غير صالح. الصيغة الصحيحة: +201012345678");
+            setLoading(false);
             return;
           } else if (err.code === "auth/too-many-requests") {
-            setErrorMsg("محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.");
+            setErrorMsg("محاولات كثيرة من هذا الـ IP. انتظر 5 دقائق.");
+            setLoading(false);
+            return;
+          } else if (err.code === "auth/captcha-check-failed") {
+            setQuotaWarning(
+              "reCAPTCHA فشل التحقق. حاول مرة أخرى — سنعرض الرمز هنا كحل بديل."
+            );
+          } else if (err.code === "auth/operation-not-allowed") {
+            setQuotaWarning(
+              "⚠️ Phone Auth غير مُفعّل في Firebase Console. افتح: https://console.firebase.google.com/project/student-8f889/authentication/providers — فعّل Phone."
+            );
+          } else if (err.code === "auth/api-key-not-valid") {
+            setErrorMsg("Firebase API Key غير صالح. تحقق من NEXT_PUBLIC_FIREBASE_API_KEY.");
+            setLoading(false);
+            return;
+          } else if (err.code === "auth/invalid-verification-code") {
+            setErrorMsg("رمز التحقق غير صحيح أو منتهي. حاول مرة أخرى.");
+            setLoading(false);
+            return;
+          } else if (
+            err.message?.includes("auth/invalid-api-key") ||
+            err.message?.includes("XMLHttpRequest")
+          ) {
+            setErrorMsg(
+              "Firebase API Key غير صالح أو Domain غير مصرّح به. تحقق من إعدادات Firebase."
+            );
+            setLoading(false);
             return;
           } else {
             setQuotaWarning(
-              "Firebase فشل: " + (err.message || "") + " — سنعرض الرمز هنا كحل بديل."
+              `Firebase فشل (${err.code || "unknown"}): ${err.message || ""} — سنعرض الرمز هنا كحل بديل.`
             );
           }
           // نواصل للـ fallback
         }
+      } else if (firebaseReady && !firebaseVerifier) {
+        console.warn("[OTP] Firebase configured but client SDK failed to load");
+        setQuotaWarning(
+          "تعذّر تحميل Firebase client SDK. سنعرض الرمز هنا كحل بديل."
+        );
       }
 
       // 2. Fallback: OTP على الشاشة
+      console.log("[OTP] Falling back to screen OTP");
       const res = await fetch("/api/admin/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -160,6 +206,7 @@ function AdminLoginForm() {
       if (!res.ok) {
         if (res.status === 429 && data.retry_after) setRetryAfter(data.retry_after);
         setErrorMsg(data.error || "فشل إرسال الرمز");
+        setLoading(false);
         return;
       }
 
@@ -175,7 +222,8 @@ function AdminLoginForm() {
         setUserInfo({ name: data.user_preview.name, role: data.user_preview.role });
       setStep("code");
     } catch (err: any) {
-      setErrorMsg("تعذّر الاتصال بالخادم");
+      console.error("[OTP] ❌ General error:", err);
+      setErrorMsg("تعذّر الاتصال بالخادم: " + (err.message || ""));
     } finally {
       setLoading(false);
     }

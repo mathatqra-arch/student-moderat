@@ -12,19 +12,18 @@ export default function StudentPage() {
   const [activeTab, setActiveTab] = useState<"announcements" | "tasks" | "inquiry" | "links">("announcements");
 
   return (
-    <div className="min-h-screen bg-dark-bg text-gray-100 pb-24">
-      {/* Header */}
+    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] pb-24">
       <StudentHeader />
 
-      {/* Main Container */}
       <main className="max-w-md mx-auto p-4 space-y-4">
-        {activeTab === "announcements" && <AnnouncementsFeed />}
-        {activeTab === "tasks" && <TasksTracker />}
-        {activeTab === "inquiry" && <InquiryForm />}
-        {activeTab === "links" && <QuickLinksSection />}
+        <div key={activeTab} className="animate-fade-in">
+          {activeTab === "announcements" && <AnnouncementsFeed />}
+          {activeTab === "tasks" && <TasksTracker />}
+          {activeTab === "inquiry" && <InquiryForm />}
+          {activeTab === "links" && <QuickLinksSection />}
+        </div>
       </main>
 
-      {/* Navigation Bar */}
       <StudentNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );

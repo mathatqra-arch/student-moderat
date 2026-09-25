@@ -2,34 +2,165 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================
+   Design Tokens — Dark / Light themes
+   ========================================== */
 :root {
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* الخطوط */
+  --font-sans: "Cairo", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* === Dark theme (default) === */
+  --bg: 11 15 25;             /* #0b0f19 */
+  --surface: 17 24 39;        /* #111827 */
+  --surface-subtle: 31 41 55; /* #1f2937 */
+  --surface-muted: 55 65 81;  /* #374151 */
+  --border: 31 41 55;
+  --border-subtle: 55 65 81;
+  --text: 243 244 246;        /* #f3f4f6 */
+  --text-muted: 156 163 175;  /* #9ca3af */
+  --text-subtle: 107 114 128; /* #6b7280 */
+  --glass-bg: rgba(17, 24, 39, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-card-bg: rgba(31, 41, 55, 0.5);
+  --shadow-color: 0 0 0;
+}
+
+:root.light {
+  /* === Light theme === */
+  --bg: 247 248 250;          /* #f7f8fa */
+  --surface: 255 255 255;     /* #ffffff */
+  --surface-subtle: 243 244 246;
+  --surface-muted: 229 231 235;
+  --border: 226 232 240;      /* #e2e8f0 */
+  --border-subtle: 203 213 225;
+  --text: 17 24 39;           /* #111827 */
+  --text-muted: 75 85 99;     /* #4b5563 */
+  --text-subtle: 107 114 128;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-card-bg: rgba(255, 255, 255, 0.85);
+  --shadow-color: 100 116 139;
+}
+
+/* ==========================================
+   Base Styles
+   ========================================== */
+* {
+  border-color: rgb(var(--border));
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background-color: #0b0f19;
-  color: #f3f4f6;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--text));
   font-family: var(--font-sans);
   direction: rtl;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Glassmorphism utility */
+/* Smooth theme transition */
+body, .theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ==========================================
+   Glassmorphism utilities
+   ========================================== */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
 }
 
 .glass-card {
-  background: rgba(31, 41, 55, 0.5);
+  background: var(--glass-card-bg);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
   transition: all 0.2s ease-in-out;
 }
 
 .glass-card:hover {
   border-color: rgba(59, 130, 246, 0.4);
   transform: translateY(-2px);
+  box-shadow: 0 12px 24px -8px rgb(var(--shadow-color) / 0.15);
+}
+
+/* ==========================================
+   Scrollbar Styling
+   ========================================== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--surface-subtle));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--surface-muted));
+  border-radius: 6px;
+  border: 2px solid rgb(var(--surface-subtle));
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-subtle));
+}
+
+/* ==========================================
+   Inputs auto-styling
+   ========================================== */
+input, textarea, select {
+  font-family: inherit;
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgb(var(--text-subtle));
+  opacity: 0.7;
+}
+
+/* Focus styles */
+input:focus, textarea:focus, select:focus, button:focus-visible {
+  outline: none;
+}
+
+/* ==========================================
+   Utility classes
+   ========================================== */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Loading skeleton shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--surface-subtle)) 0%,
+    rgb(var(--surface-muted)) 50%,
+    rgb(var(--surface-subtle)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ==========================================
+   Selection
+   ========================================== */
+::selection {
+  background: rgb(37 99 235 / 0.3);
+  color: rgb(var(--text));
 }

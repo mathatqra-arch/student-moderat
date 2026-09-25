@@ -2,46 +2,75 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Shield, MessageSquare, FileText, Users, Key, LogOut, ExternalLink, Server } from "lucide-react";
+import {
+  Shield,
+  MessageSquare,
+  FileText,
+  Users,
+  Key,
+  LogOut,
+  ExternalLink,
+  Server,
+} from "lucide-react";
 import InquiriesManager from "@/components/admin/InquiriesManager";
 import ContentManager from "@/components/admin/ContentManager";
 import TeamManager from "@/components/admin/TeamManager";
 import ApiKeyManager from "@/components/admin/ApiKeyManager";
 import McpPage from "@/app/admin/mcp/page";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+
+type TabId = "inquiries" | "content" | "team" | "keys" | "mcp";
+
+interface TabConfig {
+  id: TabId;
+  label: string;
+  shortLabel: string;
+  icon: typeof MessageSquare;
+  color: string;
+}
+
+const TABS: TabConfig[] = [
+  { id: "inquiries", label: "الاستفسارات والطلبات", shortLabel: "الاستفسارات", icon: MessageSquare, color: "brand" },
+  { id: "content", label: "الإعلانات والتكليفات", shortLabel: "المحتوى", icon: FileText, color: "brand" },
+  { id: "keys", label: "مفاتيح API", shortLabel: "المفاتيح", icon: Key, color: "brand" },
+  { id: "mcp", label: "خادم MCP", shortLabel: "MCP", icon: Server, color: "purple" },
+  { id: "team", label: "الفريق والصيانة", shortLabel: "الفريق", icon: Users, color: "brand" },
+];
 
 export default function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"inquiries" | "content" | "team" | "keys" | "mcp">("inquiries");
+  const [activeTab, setActiveTab] = useState<TabId>("inquiries");
 
   return (
-    <div className="min-h-screen bg-dark-bg text-gray-100 pb-12">
+    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] pb-12">
       {/* Admin Top Bar */}
-      <header className="sticky top-0 z-30 glass-panel border-b border-gray-800 px-4 py-3">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 glass-panel border-b border-[rgb(var(--border))] px-4 py-3">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-xl bg-brand-600/20 text-brand-500 border border-brand-500/30 flex items-center justify-center font-bold shadow-lg shadow-brand-500/10">
               <Shield className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-extrabold text-white text-base">لوحة تحكم إدارة الدفعة</h1>
-              <span className="text-xs text-emerald-400 flex items-center gap-1 font-medium">
-                ● وضع الإشراف النشط (Authenticated Admin)
-              </span>
+              <h1 className="font-extrabold text-base">لوحة تحكم إدارة الدفعة</h1>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-emerald-500 font-medium">وضع الإشراف النشط</span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link
               href="/student"
               target="_blank"
-              className="px-3 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 flex items-center gap-1.5 transition border border-gray-700"
+              className="px-3 py-1.5 rounded-xl bg-[rgb(var(--surface-subtle))] hover:bg-[rgb(var(--surface-muted))] text-xs flex items-center gap-1.5 transition border border-[rgb(var(--border))]"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">معاينة واجهة الطلاب</span>
+              <span className="hidden sm:inline">معاينة الطلاب</span>
             </Link>
-
             <Link
               href="/admin/login"
-              className="p-2 rounded-xl bg-gray-800/80 hover:bg-rose-900/40 text-gray-400 hover:text-rose-300 transition border border-gray-700"
+              className="p-2 rounded-xl bg-[rgb(var(--surface-subtle))] hover:bg-rose-500/15 text-[rgb(var(--text-muted))] hover:text-rose-500 transition border border-[rgb(var(--border))]"
               title="تسجيل الخروج"
             >
               <LogOut className="w-4 h-4" />
@@ -50,77 +79,41 @@ export default function AdminDashboardPage() {
         </div>
       </header>
 
-      {/* Main Admin Content Container */}
       <main className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 bg-gray-900/80 p-1.5 rounded-2xl border border-gray-800 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab("inquiries")}
-            className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-              activeTab === "inquiries"
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>الاستفسارات والطلبات</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("content")}
-            className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-              activeTab === "content"
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>الإعلانات والتكليفات</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("keys")}
-            className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-              activeTab === "keys"
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
-            }`}
-          >
-            <Key className="w-4 h-4" />
-            <span>مفاتيح API</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("mcp")}
-            className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-              activeTab === "mcp"
-                ? "bg-purple-600 text-white shadow-lg shadow-purple-600/20"
-                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
-            }`}
-          >
-            <Server className="w-4 h-4" />
-            <span>خادم MCP</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("team")}
-            className={`flex-1 min-w-[130px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-              activeTab === "team"
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>الفريق والصيانة</span>
-          </button>
+        {/* Navigation Tabs — Mobile-friendly Pill Nav */}
+        <div className="flex items-center gap-1.5 bg-[rgb(var(--surface))] p-1.5 rounded-2xl border border-[rgb(var(--border))] overflow-x-auto no-scrollbar shadow-sm">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const isMcp = tab.id === "mcp";
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 min-w-[110px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                  isActive
+                    ? isMcp
+                      ? "bg-purple-600 text-white shadow-lg shadow-purple-600/25"
+                      : "bg-brand-600 text-white shadow-lg shadow-brand-600/25"
+                    : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))] hover:bg-[rgb(var(--surface-subtle))]"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.shortLabel}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Tab Views */}
-        {activeTab === "inquiries" && <InquiriesManager />}
-        {activeTab === "content" && <ContentManager />}
-        {activeTab === "keys" && <ApiKeyManager />}
-        {activeTab === "mcp" && <McpPage />}
-        {activeTab === "team" && <TeamManager />}
+        {/* Tab Content */}
+        <div key={activeTab} className="animate-fade-in">
+          {activeTab === "inquiries" && <InquiriesManager />}
+          {activeTab === "content" && <ContentManager />}
+          {activeTab === "keys" && <ApiKeyManager />}
+          {activeTab === "mcp" && <McpPage />}
+          {activeTab === "team" && <TeamManager />}
+        </div>
       </main>
     </div>
   );

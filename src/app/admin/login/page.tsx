@@ -16,7 +16,9 @@ import {
   MessageSquare,
   RefreshCw,
   Sparkles,
+  Sun,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 type Step = "phone" | "code" | "set-password" | "password-login";
 type OtpMode = "firebase" | "screen" | null;
@@ -44,25 +46,20 @@ function AdminLoginForm() {
   const [otpMode, setOtpMode] = useState<OtpMode>(null);
   const [firebaseReady, setFirebaseReady] = useState<boolean | null>(null);
   const [firebaseVerifier, setFirebaseVerifier] = useState<any>(null);
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
 
-  // التحقق من إعدادات Firebase عند التحميل
   useEffect(() => {
     fetch("/api/admin/firebase/setup")
       .then((res) => res.json())
       .then((data) => {
         setFirebaseReady(data.ready);
-        // تحميل Firebase client SDK فقط لو مُهيّأ
-        if (data.ready) {
-          loadFirebaseClient();
-        }
+        if (data.ready) loadFirebaseClient();
       })
       .catch(() => setFirebaseReady(false));
   }, []);
 
-  // تحميل Firebase client SDK (للـ browser-side OTP)
   async function loadFirebaseClient() {
     try {
-      // Firebase Phone Auth يحتاج RecaptchaVerifier
       const { initializeApp } = await import("firebase/app");
       const { getAuth, RecaptchaVerifier, signInWithPhoneNumber } = await import("firebase/auth");
 
@@ -77,26 +74,19 @@ function AdminLoginForm() {
 
       const app = initializeApp(firebaseConfig);
       const auth = getAuth(app);
-
-      // إعداد reCAPTCHA invisible
       const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
         callback: () => {},
         "expired-callback": () => {},
       });
 
-      setFirebaseVerifier({
-        auth,
-        verifier,
-        signInWithPhoneNumber,
-      });
+      setFirebaseVerifier({ auth, verifier, signInWithPhoneNumber });
     } catch (err) {
       console.error("Failed to load Firebase client:", err);
       setFirebaseReady(false);
     }
   }
 
-  // Timer for retry
   useEffect(() => {
     if (retryAfter > 0) {
       const timer = setTimeout(() => setRetryAfter(retryAfter - 1), 1000);
@@ -104,83 +94,6 @@ function AdminLoginForm() {
     }
   }, [retryAfter]);
 
-  // إرسال OTP — Firebase أولاً، fallback للـ screen OTP
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phone.trim()) return;
-
-    setLoading(true);
-    setErrorMsg(null);
-    setInfoMsg(null);
-    setOtpCode(null);
-
-    try {
-      // محاولة Firebase أولاً (SMS حقيقي)
-      if (firebaseReady && firebaseVerifier) {
-        const normalizedPhone = normalizePhoneForFirebase(phone);
-        try {
-          const confirmationResult = await firebaseVerifier.signInWithPhoneNumber(
-            firebaseVerifier.auth,
-            normalizedPhone,
-            firebaseVerifier.verifier
-          );
-
-          setOtpMode("firebase");
-          setInfoMsg("تم إرسال رمز التحقق إلى رقمك عبر SMS (Firebase)");
-          if (userInfo?.name) {
-            // keep
-          }
-          setStep("code");
-          // نخزّن confirmationResult في متغير window (مؤقت)
-          (window as any).__firebaseConfirmation = confirmationResult;
-          return;
-        } catch (err: any) {
-          console.error("Firebase OTP failed:", err);
-          // لو فشل Firebase (مثلاً quota)، نكمل بـ screen OTP كـ fallback
-          if (err.code === "auth/quota-exceeded") {
-            setErrorMsg("تجاوزت حصة Firebase اليومية (10 SMS). سنستخدم OTP على الشاشة.");
-          } else if (err.code === "auth/invalid-phone-number") {
-            setErrorMsg("رقم الهاتف غير صالح. تحقق من الصيغة.");
-            return;
-          } else {
-            setErrorMsg("Firebase فشل: " + (err.message || "خطأ غير معروف") + " — سنستخدم OTP على الشاشة.");
-          }
-        }
-      }
-
-      // Fallback: OTP على الشاشة
-      const res = await fetch("/api/admin/otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 429 && data.retry_after) {
-          setRetryAfter(data.retry_after);
-        }
-        setErrorMsg(data.error || "فشل إرسال الرمز");
-        return;
-      }
-
-      setOtpMode("screen");
-      setInfoMsg("تم إرسال رمز التحقق (وضع التطوير — الرمز معروض هنا)");
-      if (data.code) {
-        setOtpCode(data.code);
-      }
-      if (data.user_preview) {
-        setUserInfo({ name: data.user_preview.name, role: data.user_preview.role });
-      }
-      setStep("code");
-    } catch (err: any) {
-      setErrorMsg("تعذّر الاتصال بالخادم");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // تطبيع رقم الهاتف لـ Firebase (E.164 صارم)
   function normalizePhoneForFirebase(phone: string): string {
     const cleaned = phone.replace(/[\s\-()]/g, "").trim();
     if (cleaned.startsWith("+")) return cleaned;
@@ -189,7 +102,85 @@ function AdminLoginForm() {
     return cleaned;
   }
 
-  // التحقق من الرمز
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phone.trim()) return;
+
+    setLoading(true);
+    setErrorMsg(null);
+    setInfoMsg(null);
+    setOtpCode(null);
+    setQuotaWarning(null);
+
+    try {
+      // 1. محاولة Firebase Phone Auth (SMS حقيقي)
+      if (firebaseReady && firebaseVerifier) {
+        try {
+          const normalizedPhone = normalizePhoneForFirebase(phone);
+          const confirmationResult = await firebaseVerifier.signInWithPhoneNumber(
+            firebaseVerifier.auth,
+            normalizedPhone,
+            firebaseVerifier.verifier
+          );
+
+          setOtpMode("firebase");
+          setInfoMsg("تم إرسال رمز التحقق إلى رقمك عبر SMS");
+          setStep("code");
+          (window as any).__firebaseConfirmation = confirmationResult;
+          return;
+        } catch (err: any) {
+          console.error("Firebase OTP failed:", err);
+          if (err.code === "auth/quota-exceeded") {
+            setQuotaWarning(
+              "تم تجاوز حصة Firebase اليومية (10 SMS). سنعرض الرمز هنا كحل بديل — تواصل مع المشرف لزيادة الحصة."
+            );
+          } else if (err.code === "auth/invalid-phone-number") {
+            setErrorMsg("رقم الهاتف غير صالح. تحقق من الصيغة.");
+            return;
+          } else if (err.code === "auth/too-many-requests") {
+            setErrorMsg("محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.");
+            return;
+          } else {
+            setQuotaWarning(
+              "Firebase فشل: " + (err.message || "") + " — سنعرض الرمز هنا كحل بديل."
+            );
+          }
+          // نواصل للـ fallback
+        }
+      }
+
+      // 2. Fallback: OTP على الشاشة
+      const res = await fetch("/api/admin/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim() }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 429 && data.retry_after) setRetryAfter(data.retry_after);
+        setErrorMsg(data.error || "فشل إرسال الرمز");
+        return;
+      }
+
+      setOtpMode("screen");
+      setInfoMsg(
+        quotaWarning ||
+          (data.delivery_method === "sms"
+            ? "تم إرسال الرمز عبر SMS"
+            : "وضع التطوير — الرمز معروض هنا")
+      );
+      if (data.code) setOtpCode(data.code);
+      if (data.user_preview)
+        setUserInfo({ name: data.user_preview.name, role: data.user_preview.role });
+      setStep("code");
+    } catch (err: any) {
+      setErrorMsg("تعذّر الاتصال بالخادم");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.length !== 6) {
@@ -201,14 +192,12 @@ function AdminLoginForm() {
     setErrorMsg(null);
 
     try {
-      // Firebase verification
       if (otpMode === "firebase" && (window as any).__firebaseConfirmation) {
         const confirmation = (window as any).__firebaseConfirmation;
         try {
           const userCredential = await confirmation.confirm(code);
           const idToken = await userCredential.user.getIdToken();
 
-          // أرسل الـ idToken للـ server للتحقق وإنشاء Supabase session
           const res = await fetch("/api/admin/firebase/verify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -230,19 +219,15 @@ function AdminLoginForm() {
           }
           return;
         } catch (err: any) {
-          console.error("Firebase confirm failed:", err);
-          if (err.code === "auth/invalid-verification-code") {
+          if (err.code === "auth/invalid-verification-code")
             setErrorMsg("الرمز غير صحيح. حاول مرة أخرى.");
-          } else if (err.code === "auth/code-expired") {
+          else if (err.code === "auth/code-expired")
             setErrorMsg("انتهت صلاحية الرمز. اطلب رمزاً جديداً.");
-          } else {
-            setErrorMsg("فشل التحقق: " + (err.message || ""));
-          }
+          else setErrorMsg("فشل التحقق: " + (err.message || ""));
           return;
         }
       }
 
-      // Screen OTP verification (fallback)
       const res = await fetch("/api/admin/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -269,7 +254,6 @@ function AdminLoginForm() {
     }
   };
 
-  // تعيين كلمة مرور جديدة
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
@@ -313,7 +297,6 @@ function AdminLoginForm() {
     }
   };
 
-  // Password login (بديل)
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim() || !passwordLogin) return;
@@ -344,39 +327,56 @@ function AdminLoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[rgb(var(--bg))] flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-600/15 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Container for Firebase reCAPTCHA */}
       <div id="recaptcha-container" />
 
-      <div className="max-w-md w-full glass-card p-6 md:p-8 rounded-3xl space-y-6 border border-gray-800 relative z-10">
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/10">
-            <Shield className="w-6 h-6" />
+      {/* زرار الـ Theme */}
+      <div className="absolute top-4 left-4 z-20">
+        <ThemeToggle />
+      </div>
+
+      <div className="max-w-md w-full glass-card p-6 md:p-8 rounded-3xl space-y-6 border border-[rgb(var(--border))] relative z-10 shadow-2xl animate-scale-in">
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 text-white shadow-lg shadow-brand-600/30 mx-auto">
+            <Shield className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white">لوحة تحكم الأدمن</h1>
-          <p className="text-xs text-gray-400">دخول مشرفي الدفعة — مصادقة برقم الهاتف</p>
+          <div>
+            <h1 className="text-2xl font-extrabold">لوحة تحكم الأدمن</h1>
+            <p className="text-xs text-[rgb(var(--text-muted))] mt-1">
+              دخول مشرفي الدفعة — مصادقة برقم الهاتف
+            </p>
+          </div>
         </div>
 
         {/* Auth Provider Badge */}
         {firebaseReady !== null && (
-          <div className={`flex items-center gap-2 p-2 rounded-xl text-[11px] border ${
-            firebaseReady
-              ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300"
-              : "bg-amber-950/40 border-amber-500/30 text-amber-300"
-          }`}>
+          <div
+            className={`flex items-center gap-2 p-2.5 rounded-xl text-[11px] border ${
+              firebaseReady
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-500"
+            }`}
+          >
             <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
             <span>
               {firebaseReady
                 ? "Firebase Phone Auth مُفعّل — سيصلك الرمز عبر SMS حقيقي"
-                : "وضع التطوير — الرمز سيظهر على الشاشة (لتفعيل Firebase شغّل /api/admin/firebase/setup)"}
+                : "وضع التطوير — الرمز سيظهر على الشاشة"}
             </span>
           </div>
         )}
 
+        {quotaWarning && (
+          <div className="flex items-start gap-2 p-2.5 rounded-xl text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span>{quotaWarning}</span>
+          </div>
+        )}
+
         {/* Step indicator */}
-        <div className="flex items-center justify-center gap-2 text-[10px] text-gray-500">
+        <div className="flex items-center justify-center gap-2 text-[10px] text-[rgb(var(--text-muted))]">
           {[
             { id: "phone", label: "الهاتف" },
             { id: "code", label: "الرمز" },
@@ -393,39 +393,39 @@ function AdminLoginForm() {
             return (
               <div key={s.id} className="flex items-center gap-1">
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all ${
                     active
-                      ? "bg-blue-600 text-white border-blue-500"
+                      ? "bg-brand-600 text-white border-brand-500 scale-110"
                       : done
-                      ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30"
-                      : "bg-gray-800 text-gray-500 border-gray-700"
+                      ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/30"
+                      : "bg-[rgb(var(--surface-subtle))] text-[rgb(var(--text-muted))] border-[rgb(var(--border))]"
                   }`}
                 >
                   {done ? "✓" : i + 1}
                 </div>
-                <span className={active ? "text-blue-400" : ""}>{s.label}</span>
-                {i < 2 && <div className="w-4 h-px bg-gray-700 mx-1" />}
+                <span className={active ? "text-brand-500 font-semibold" : ""}>{s.label}</span>
+                {i < 2 && <div className="w-6 h-px bg-[rgb(var(--border))] mx-1" />}
               </div>
             );
           })}
         </div>
 
         {errorMsg && (
-          <div className="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2">
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2 animate-fade-in">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {infoMsg && (
-          <div className="bg-blue-950/60 border border-blue-500/30 text-blue-300 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2">
+          <div className="bg-brand-500/10 border border-brand-500/30 text-brand-500 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2 animate-fade-in">
             <MessageSquare className="w-4 h-4 flex-shrink-0" />
             <span>{infoMsg}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2">
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2 animate-fade-in">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>{successMsg}</span>
           </div>
@@ -433,10 +433,10 @@ function AdminLoginForm() {
 
         {/* Step 1: Phone */}
         {step === "phone" && (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-blue-400" />
+          <form onSubmit={handleSendOtp} className="space-y-4 animate-fade-in">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-brand-500" />
                 رقم الهاتف
               </label>
               <input
@@ -448,17 +448,17 @@ function AdminLoginForm() {
                 required
                 autoFocus
                 dir="ltr"
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition text-left font-mono"
+                className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm placeholder-[rgb(var(--text-subtle))] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition text-left font-mono"
               />
-              <p className="text-[10px] text-gray-500">
-                أدخل الرقم بصيغة محلية (01012345678) أو E.164 (+201012345678)
+              <p className="text-[10px] text-[rgb(var(--text-subtle))]">
+                بصيغة محلية (01012345678) أو E.164 (+201012345678)
               </p>
             </div>
 
             <button
               type="submit"
               disabled={loading || retryAfter > 0 || firebaseReady === null}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm"
+              className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 text-sm hover:-translate-y-0.5"
             >
               {loading ? (
                 <>
@@ -473,7 +473,7 @@ function AdminLoginForm() {
               ) : (
                 <>
                   <MessageSquare className="w-4 h-4" />
-                  <span>إرسال رمز التحقق {firebaseReady ? "(SMS)" : ""}</span>
+                  <span>إرسال رمز التحقق {firebaseReady ? "via SMS" : ""}</span>
                 </>
               )}
             </button>
@@ -482,7 +482,7 @@ function AdminLoginForm() {
               <button
                 type="button"
                 onClick={() => setStep("password-login")}
-                className="text-[11px] text-gray-500 hover:text-gray-300 transition"
+                className="text-[11px] text-[rgb(var(--text-muted))] hover:text-brand-500 transition"
               >
                 لديك كلمة مرور؟ سجّل دخول بكلمة المرور
               </button>
@@ -492,41 +492,46 @@ function AdminLoginForm() {
 
         {/* Step 2: Code */}
         {step === "code" && (
-          <form onSubmit={handleVerifyCode} className="space-y-4">
+          <form onSubmit={handleVerifyCode} className="space-y-4 animate-fade-in">
             {otpCode && otpMode === "screen" && (
-              <div className="bg-amber-950/60 border border-amber-500/30 p-3 rounded-xl text-center space-y-1">
-                <p className="text-[10px] text-amber-400 font-semibold">
-                  ⚠️ وضع التطوير — الرمز:
+              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-center space-y-2">
+                <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide">
+                  {quotaWarning ? "حل بديل — الرمز:" : "وضع التطوير — الرمز:"}
                 </p>
-                <p className="text-2xl font-mono font-bold text-amber-300 tracking-[0.4em]">
+                <p className="text-3xl font-mono font-bold text-amber-500 tracking-[0.5em]">
                   {otpCode}
                 </p>
-                <p className="text-[10px] text-gray-500">
-                  لتفعيل Firebase Phone Auth (SMS حقيقي) راجع دليل الإعداد
+                <p className="text-[10px] text-[rgb(var(--text-subtle))]">
+                  {firebaseReady
+                    ? "Firebase لم يتمكن من إرسال SMS — استخدم هذا الرمز"
+                    : "لتفعيل SMS الحقيقي، أضف Firebase config"}
                 </p>
               </div>
             )}
 
             {otpMode === "firebase" && (
-              <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl text-center space-y-1">
-                <p className="text-[11px] text-emerald-300 font-semibold">
-                  ✅ تم إرسال الرمز عبر SMS إلى رقمك
+              <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl text-center space-y-2">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500/15 mb-1">
+                  <MessageSquare className="w-5 h-5 text-emerald-500" />
+                </div>
+                <p className="text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
+                  تم إرسال الرمز عبر SMS
                 </p>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-[rgb(var(--text-subtle))]">
                   قد يستغرق وصول الرسالة 10-30 ثانية
                 </p>
               </div>
             )}
 
             {userInfo && (
-              <div className="bg-gray-900/60 border border-gray-700 p-2.5 rounded-xl text-center text-xs text-gray-400">
-                مرحباً <span className="text-white font-semibold">{userInfo.name}</span>
+              <div className="bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] p-2.5 rounded-xl text-center text-xs">
+                مرحباً <span className="font-semibold text-brand-500">{userInfo.name}</span>
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-blue-400" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-brand-500" />
                 رمز التحقق (6 أرقام)
               </label>
               <input
@@ -534,20 +539,20 @@ function AdminLoginForm() {
                 inputMode="numeric"
                 pattern="\d{6}"
                 maxLength={6}
-                placeholder="______"
+                placeholder="••••••"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 required
                 autoFocus
                 dir="ltr"
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 text-center text-2xl font-mono tracking-[0.5em] text-gray-100 placeholder-gray-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+                className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-3.5 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading || code.length !== 6}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm"
+              className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 text-sm hover:-translate-y-0.5"
             >
               {loading ? (
                 <>
@@ -569,8 +574,9 @@ function AdminLoginForm() {
                   setInfoMsg(null);
                   setOtpCode(null);
                   setOtpMode(null);
+                  setQuotaWarning(null);
                 }}
-                className="text-gray-400 hover:text-gray-200 transition"
+                className="text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))] transition"
               >
                 ← تغيير الرقم
               </button>
@@ -578,7 +584,7 @@ function AdminLoginForm() {
                 type="button"
                 onClick={handleSendOtp}
                 disabled={loading || retryAfter > 0}
-                className="text-blue-400 hover:text-blue-300 transition disabled:opacity-50"
+                className="text-brand-500 hover:text-brand-400 transition disabled:opacity-50"
               >
                 {retryAfter > 0 ? `إعادة إرسال خلال ${retryAfter}s` : "إعادة إرسال الرمز"}
               </button>
@@ -588,18 +594,20 @@ function AdminLoginForm() {
 
         {/* Step 3: Set Password */}
         {step === "set-password" && (
-          <form onSubmit={handleSetPassword} className="space-y-4">
-            <div className="bg-blue-950/40 border border-blue-500/30 p-3 rounded-xl text-[11px] text-blue-200/80 space-y-1">
-              <p className="font-semibold text-blue-300">🔑 تعيين كلمة مرور جديدة</p>
-              <p>
-                اضبط كلمة مرور قوية تستخدمها في المرات القادمة لتسجيل الدخول السريع بكلمة المرور بدلاً
-                من OTP.
+          <form onSubmit={handleSetPassword} className="space-y-4 animate-fade-in">
+            <div className="bg-brand-500/10 border border-brand-500/30 p-3 rounded-xl text-[11px] text-brand-600 dark:text-brand-400 space-y-1">
+              <p className="font-semibold flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                تعيين كلمة مرور جديدة
+              </p>
+              <p className="text-[rgb(var(--text-muted))]">
+                اضبط كلمة مرور قوية لتسجيل الدخول السريع في المرات القادمة.
               </p>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
                 كلمة المرور الجديدة
               </label>
               <div className="relative">
@@ -611,12 +619,12 @@ function AdminLoginForm() {
                   required
                   autoFocus
                   minLength={6}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-gray-100 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono"
+                  className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition font-mono"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -624,9 +632,9 @@ function AdminLoginForm() {
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                 تأكيد كلمة المرور
               </label>
               <input
@@ -636,14 +644,14 @@ function AdminLoginForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono"
+                className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition font-mono"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-sm"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-sm hover:-translate-y-0.5"
             >
               {loading ? (
                 <>
@@ -660,12 +668,12 @@ function AdminLoginForm() {
           </form>
         )}
 
-        {/* Alternative: Password login */}
+        {/* Password Login Alternative */}
         {step === "password-login" && (
-          <form onSubmit={handlePasswordLogin} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-blue-400" />
+          <form onSubmit={handlePasswordLogin} className="space-y-4 animate-fade-in">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-brand-500" />
                 رقم الهاتف
               </label>
               <input
@@ -677,13 +685,13 @@ function AdminLoginForm() {
                 required
                 autoFocus
                 dir="ltr"
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition text-left font-mono"
+                className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition text-left font-mono"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
                 كلمة المرور
               </label>
               <div className="relative">
@@ -693,12 +701,12 @@ function AdminLoginForm() {
                   value={passwordLogin}
                   onChange={(e) => setPasswordLogin(e.target.value)}
                   required
-                  className="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-gray-100 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+                  className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -709,7 +717,7 @@ function AdminLoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm"
+              className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 text-sm hover:-translate-y-0.5"
             >
               {loading ? (
                 <>
@@ -725,7 +733,7 @@ function AdminLoginForm() {
               <button
                 type="button"
                 onClick={() => setStep("phone")}
-                className="text-[11px] text-gray-500 hover:text-gray-300 transition"
+                className="text-[11px] text-[rgb(var(--text-muted))] hover:text-brand-500 transition"
               >
                 ← العودة لتسجيل الدخول بـ OTP
               </button>
@@ -733,8 +741,11 @@ function AdminLoginForm() {
           </form>
         )}
 
-        <div className="pt-4 border-t border-gray-800/80 text-center">
-          <a href="/student" className="text-xs text-gray-400 hover:text-gray-200 inline-flex items-center gap-1 transition">
+        <div className="pt-4 border-t border-[rgb(var(--border))] text-center">
+          <a
+            href="/student"
+            className="text-xs text-[rgb(var(--text-muted))] hover:text-brand-500 inline-flex items-center gap-1 transition"
+          >
             <ArrowRight className="w-3.5 h-3.5" />
             العودة لواجهة الطلاب العامة
           </a>
@@ -748,8 +759,8 @@ export default function AdminLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+        <div className="min-h-screen bg-[rgb(var(--bg))] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
         </div>
       }
     >

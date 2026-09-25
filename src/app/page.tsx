@@ -1,67 +1,96 @@
 import Link from "next/link";
-import { Shield, Sparkles, Bell, Calendar, HelpCircle, CheckCircle2 } from "lucide-react";
+import {
+  Shield,
+  Sparkles,
+  Bell,
+  Calendar,
+  HelpCircle,
+  CheckCircle2,
+  ArrowLeft,
+  Smartphone,
+} from "lucide-react";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-gradient-to-b from-dark-bg via-[#0d1322] to-dark-bg">
-      {/* Background Decorative Blur */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-[rgb(var(--bg))]">
+      {/* خلفية زخرفية */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* زرار الـ Theme Toggle - في الزاوية */}
+      <div className="absolute top-4 left-4 z-20">
+        <ThemeToggle />
+      </div>
 
       <div className="max-w-2xl w-full text-center space-y-8 relative z-10">
         {/* Status Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-blue-400 text-sm font-medium border border-blue-500/20 shadow-lg shadow-blue-500/10">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-brand-500 text-sm font-medium border border-brand-500/20 shadow-lg shadow-brand-500/10 animate-fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>تم إنجاز المرحلة الأولى: تهيئة المشروع والبنية التحتية بنجاح</span>
+          <span>منصة إدارة الدفعة — جاهزة للاستخدام</span>
         </div>
 
         {/* Hero Title */}
-        <div className="space-y-4">
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
-            منصة إدارة الدفعة <span className="bg-gradient-to-l from-blue-400 to-indigo-500 bg-clip-text text-transparent">(Batch Platform)</span>
+        <div className="space-y-4 animate-slide-up">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-brand-500 to-indigo-600 text-white shadow-xl shadow-brand-600/30 mb-2">
+            <Sparkles className="w-10 h-10" />
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight bg-gradient-to-l from-brand-500 to-indigo-500 bg-clip-text text-transparent">
+            منصة إدارة الدفعة
           </h1>
-          <p className="text-gray-400 text-lg max-w-xl mx-auto">
-            الحل التقني الذكي لتنظيم العمليات الأكاديمية والطلابية، تجميع الجداول والإعلانات، وإدارة استفسارات الطلاب بسرعة وكفاءة.
+          <p className="text-[rgb(var(--text-muted))] text-lg max-w-xl mx-auto leading-relaxed">
+            الحل التقني الذكي لتنظيم العمليات الأكاديمية والطلابية، تجميع الجداول والإعلانات، وإدارة
+            استفسارات الطلاب بسرعة وكفاءة.
           </p>
         </div>
 
         {/* Feature Cards Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-right">
-          <div className="glass-card p-4 rounded-xl space-y-2">
-            <Bell className="w-6 h-6 text-blue-400" />
-            <h3 className="font-semibold text-white text-sm">الإعلانات</h3>
-            <p className="text-xs text-gray-400">تحديثات وإشعارات عاجلة</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-right animate-slide-up" style={{ animationDelay: "100ms" }}>
+          <div className="glass-card p-4 rounded-2xl space-y-2 group">
+            <div className="w-10 h-10 rounded-xl bg-brand-500/15 text-brand-500 border border-brand-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Bell className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-sm">الإعلانات</h3>
+            <p className="text-xs text-[rgb(var(--text-muted))]">تحديثات وإشعارات عاجلة</p>
           </div>
-          <div className="glass-card p-4 rounded-xl space-y-2">
-            <Calendar className="w-6 h-6 text-amber-400" />
-            <h3 className="font-semibold text-white text-sm">التكليفات</h3>
-            <p className="text-xs text-gray-400">مواعيد التسليم النهائية</p>
+          <div className="glass-card p-4 rounded-2xl space-y-2 group">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-sm">التكليفات</h3>
+            <p className="text-xs text-[rgb(var(--text-muted))]">مواعيد التسليم النهائية</p>
           </div>
-          <div className="glass-card p-4 rounded-xl space-y-2">
-            <HelpCircle className="w-6 h-6 text-emerald-400" />
-            <h3 className="font-semibold text-white text-sm">الاستفسارات</h3>
-            <p className="text-xs text-gray-400">تواصل فوري No-Auth</p>
+          <div className="glass-card p-4 rounded-2xl space-y-2 group">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-500 border border-emerald-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <HelpCircle className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-sm">الاستفسارات</h3>
+            <p className="text-xs text-[rgb(var(--text-muted))]">تواصل فوري بدون تسجيل</p>
           </div>
-          <div className="glass-card p-4 rounded-xl space-y-2">
-            <Sparkles className="w-6 h-6 text-purple-400" />
-            <h3 className="font-semibold text-white text-sm">الذكاء الاصطناعي</h3>
-            <p className="text-xs text-gray-400">تحليل وإجابات ذكية</p>
+          <div className="glass-card p-4 rounded-2xl space-y-2 group">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-500 border border-purple-500/25 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-sm">الذكاء الاصطناعي</h3>
+            <p className="text-xs text-[rgb(var(--text-muted))]">MCP + ChatGPT</p>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 animate-slide-up" style={{ animationDelay: "200ms" }}>
           <Link
             href="/student"
-            className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-600/40 hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
-            واجهة الطلاب (PWA)
+            <span>واجهة الطلاب</span>
+            <ArrowLeft className="w-4 h-4" />
           </Link>
           <Link
             href="/admin"
-            className="w-full sm:w-auto px-6 py-3.5 rounded-xl glass-panel hover:bg-gray-800 text-gray-200 font-semibold transition border border-gray-700 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl glass-panel hover:bg-[rgb(var(--surface-subtle))] text-[rgb(var(--text))] font-semibold transition-all border border-[rgb(var(--border))] hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
-            <Shield className="w-4 h-4 text-gray-400" />
-            لوحة تحكم الأدمن
+            <Shield className="w-4 h-4 text-brand-500" />
+            <span>لوحة تحكم الأدمن</span>
           </Link>
         </div>
       </div>

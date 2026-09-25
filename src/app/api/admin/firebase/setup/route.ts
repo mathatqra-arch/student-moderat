@@ -3,7 +3,8 @@ import { isFirebaseConfigured, getFirebaseProjectId } from "@/lib/firebase/verif
 
 // ==========================================
 // Firebase Setup Endpoint
-// يتحقق من إعدادات Firebase ويعرض حالتها
+// يتحقق من إعدادات Firebase ويعرض حالتها + يرجع الـ client config
+// (endpoint عام - مش محمي - عشان الـ client يقدر يقرأ الإعدادات)
 // ==========================================
 
 export async function GET() {
@@ -12,12 +13,23 @@ export async function GET() {
 
   let adminAuthError: string | null = null;
   if (adminConfigured) {
-    // محاولة التحقق من project_id فقط (لا حاجة لاتصال فعلي بـ Google)
     const projectId = getFirebaseProjectId();
     if (!projectId) {
       adminAuthError = "Could not extract project_id from Firebase config";
     }
   }
+
+  // الـ client config الـ public (آمن للعرض في المتصفح)
+  const clientConfig = clientConfigured
+    ? {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+      }
+    : null;
 
   return NextResponse.json({
     client_configured: clientConfigured,
@@ -28,7 +40,6 @@ export async function GET() {
       apiKey_present: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || null,
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || null,
-      // server-side (admin)
       service_account_json_present: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
       separate_creds_present: Boolean(
         process.env.FIREBASE_PROJECT_ID &&
@@ -36,6 +47,8 @@ export async function GET() {
           process.env.FIREBASE_PRIVATE_KEY
       ),
     },
+    // الـ client config (يُرجع للعميل عشان يـ initialize Firebase SDK)
+    client_config: clientConfig,
     setup_instructions: !clientConfigured
       ? {
           title: "خطوات تفعيل Firebase Phone Auth (مجاني 100%)",

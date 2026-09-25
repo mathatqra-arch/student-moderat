@@ -61,23 +61,23 @@ function AdminLoginForm() {
   }, []);
 
   // تحميل Firebase client SDK ديناميكياً (browser only)
-  // يجيب الإعدادات من /api/admin/firebase/config لأن process.env مش متاح على Cloudflare runtime
+  // يجيب الإعدادات من /api/admin/firebase/setup (endpoint عام)
   async function loadFirebaseClient() {
     if (typeof window === "undefined") return;
     try {
-      // 1. جلب الإعدادات من الـ API
-      const configRes = await fetch("/api/admin/firebase/config");
-      const configData = await configRes.json();
+      // 1. جلب الإعدادات من الـ setup endpoint (عام - مش محمي)
+      const configRes = await fetch("/api/admin/firebase/setup");
+      const setupData = await configRes.json();
 
-      if (!configData.configured || !configData.config) {
-        console.error("[Firebase] Config not available from API");
+      if (!setupData.client_config) {
+        console.error("[Firebase] Config not available from setup endpoint");
         setFirebaseReady(false);
         return;
       }
 
-      console.log("[Firebase] Got config from API:", {
-        projectId: configData.config.projectId,
-        apiKeyLength: configData.config.apiKey?.length || 0,
+      console.log("[Firebase] Got config from setup endpoint:", {
+        projectId: setupData.client_config.projectId,
+        apiKeyLength: setupData.client_config.apiKey?.length || 0,
       });
 
       // 2. تحميل Firebase SDK
@@ -85,7 +85,7 @@ function AdminLoginForm() {
       const { getAuth, RecaptchaVerifier, signInWithPhoneNumber } = await import("firebase/auth");
 
       // 3. تجنب إعادة التهيئة
-      const app = getApps().length === 0 ? initializeApp(configData.config) : getApp();
+      const app = getApps().length === 0 ? initializeApp(setupData.client_config) : getApp();
       const auth = getAuth(app);
 
       // 4. إنشاء RecaptchaVerifier (invisible)

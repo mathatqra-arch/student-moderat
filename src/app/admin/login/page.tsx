@@ -61,31 +61,58 @@ function AdminLoginForm() {
   }, []);
 
   // تحميل Firebase client SDK ديناميكياً (browser only)
-  // يجيب الإعدادات من /api/admin/firebase/setup (endpoint عام)
+  // يجيب الإعدادات من /api/admin/firebase/setup أو /api/admin/firebase/config
   async function loadFirebaseClient() {
     if (typeof window === "undefined") return;
     try {
-      // 1. جلب الإعدادات من الـ setup endpoint (عام - مش محمي)
-      const configRes = await fetch("/api/admin/firebase/setup");
-      const setupData = await configRes.json();
+      // 1. محاولة جلب الإعدادات من setup endpoint أولاً (مستثنى من middleware دائماً)
+      let firebaseConfig: any = null;
 
-      if (!setupData.client_config) {
-        console.error("[Firebase] Config not available from setup endpoint");
+      try {
+        const setupRes = await fetch("/api/admin/firebase/setup");
+        if (setupRes.ok) {
+          const setupData = await setupRes.json();
+          firebaseConfig = setupData.client_config || null;
+          console.log("[Firebase] Got config from setup endpoint:", {
+            projectId: firebaseConfig?.projectId,
+            apiKeyLength: firebaseConfig?.apiKey?.length || 0,
+          });
+        }
+      } catch (setupErr) {
+        console.warn("[Firebase] Setup endpoint failed:", setupErr);
+      }
+
+      // 2. fallback: محاولة config endpoint (ممكن يرجع 401 لو middleware قديم)
+      if (!firebaseConfig) {
+        try {
+          const configRes = await fetch("/api/admin/firebase/config");
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            if (configData.configured && configData.config) {
+              firebaseConfig = configData.config;
+              console.log("[Firebase] Got config from config endpoint:", {
+                projectId: firebaseConfig.projectId,
+                apiKeyLength: firebaseConfig.apiKey?.length || 0,
+              });
+            }
+          }
+        } catch (configErr) {
+          console.warn("[Firebase] Config endpoint failed:", configErr);
+        }
+      }
+
+      if (!firebaseConfig) {
+        console.error("[Firebase] Could not get config from any endpoint");
         setFirebaseReady(false);
         return;
       }
 
-      console.log("[Firebase] Got config from setup endpoint:", {
-        projectId: setupData.client_config.projectId,
-        apiKeyLength: setupData.client_config.apiKey?.length || 0,
-      });
-
-      // 2. تحميل Firebase SDK
+      // 3. تحميل Firebase SDK
       const { initializeApp, getApps, getApp } = await import("firebase/app");
       const { getAuth, RecaptchaVerifier, signInWithPhoneNumber } = await import("firebase/auth");
 
-      // 3. تجنب إعادة التهيئة
-      const app = getApps().length === 0 ? initializeApp(setupData.client_config) : getApp();
+      // 4. تجنب إعادة التهيئة
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       const auth = getAuth(app);
 
       // 4. إنشاء RecaptchaVerifier (invisible)

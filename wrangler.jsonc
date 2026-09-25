@@ -11,6 +11,15 @@
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://apcxwxnkntegbkimsmty.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwY3h3eG5rbnRlZ2JraW1zbXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNTY3NDgsImV4cCI6MjEwNTgzMjc0OH0.cd29RFE4mDJISbwsee3xC0l2SdSntHxekNaS38lEPM4",
-    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwY3h3eG5rbnRlZ2JraW1zbXR5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDI1Njc0OCwiZXhwIjoyMTA1ODMyNzQ4fQ.PfjahE-jksd2KLK6nIYgf1mx13QIbmIlHMI2c_t-x60"
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwY3h3eG5rbnRlZ2JraW1zbXR5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDI1Njc0OCwiZXhwIjoyMTA1ODMyNzQ4fQ.PfjahE-jksd2KLK6nIYgf1mx13QIbmIlHMI2c_t-x60",
+    "MCP_SECRET_TOKEN": "bmp_dev_secret_token_change_me_in_production_2026",
+    "NEXT_PUBLIC_FIREBASE_API_KEY": "AIzaSyCGRyAqC0MDkrNewP_idtONf7s3iM0rVEw",
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN": "student-8f889.firebaseapp.com",
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID": "student-8f889",
+    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET": "student-8f889.firebasestorage.app",
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "516208824993",
+    "NEXT_PUBLIC_FIREBASE_APP_ID": "1:516208824993:web:f64909a0711a881620d6e0"
+    // ملاحظة: FIREBASE_SERVICE_ACCOUNT_JSON لازم يُضاف كـ Secret من Cloudflare Dashboard
+    // لأنه يحوي private key حساس — راجع README.md
   }
 }

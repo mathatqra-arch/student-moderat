@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isFirebaseConfigured } from "@/lib/firebase/admin";
+import { isFirebaseConfigured, getFirebaseProjectId } from "@/lib/firebase/verifier";
 
 // ==========================================
 // Firebase Setup Endpoint
@@ -12,14 +12,10 @@ export async function GET() {
 
   let adminAuthError: string | null = null;
   if (adminConfigured) {
-    try {
-      // محاولة تهيئة Firebase Admin — إن فشلت، نرجع الخطأ
-      const { getAdminAuth } = await import("@/lib/firebase/admin");
-      const auth = getAdminAuth();
-      // محاولة قائمة مستخدمين للتأكد من صحة الـ credentials
-      await auth.listUsers(1);
-    } catch (err: any) {
-      adminAuthError = err.message;
+    // محاولة التحقق من project_id فقط (لا حاجة لاتصال فعلي بـ Google)
+    const projectId = getFirebaseProjectId();
+    if (!projectId) {
+      adminAuthError = "Could not extract project_id from Firebase config";
     }
   }
 

@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { getAdminAuth, isFirebaseConfigured } from "@/lib/firebase/admin";
+import {
+  verifyFirebaseIdToken,
+  isFirebaseConfigured,
+  getFirebaseProjectId,
+} from "@/lib/firebase/verifier";
 
 // ==========================================
 // Firebase Verify Endpoint
 // يستقبل Firebase idToken من العميل (بعد OTP Firebase)
-// يتحقق منه server-side، يلاقي المستخدم في Supabase، وينشئ session
+// يتحقق منه server-side باستخدام Web Crypto API (Cloudflare Workers compatible)
+// يلاقي المستخدم في Supabase، وينشئ session
 // ==========================================
 
 const SUPABASE_URL =
@@ -65,15 +70,23 @@ export async function POST(request: Request): Promise<NextResponse<VerifyRespons
       );
     }
 
-    // 2. التحقق من Firebase idToken
-    const adminAuth = getAdminAuth();
+    // 2. التحقق من Firebase idToken باستخدام Web Crypto API
+    // (لا يعتمد على firebase-admin SDK، يعمل على Cloudflare Workers)
+    const projectId = getFirebaseProjectId();
+    if (!projectId) {
+      return NextResponse.json(
+        { ok: false, error: "Firebase project_id غير مُهيّأ" },
+        { status: 500 }
+      );
+    }
+
     let decodedToken;
     try {
-      decodedToken = await adminAuth.verifyIdToken(id_token);
+      decodedToken = await verifyFirebaseIdToken(id_token, { projectId });
     } catch (err: any) {
       console.error("Firebase token verification failed:", err.message);
       return NextResponse.json(
-        { ok: false, error: "Firebase token غير صالح أو منتهي" },
+        { ok: false, error: `Firebase token غير صالح: ${err.message}` },
         { status: 401 }
       );
     }

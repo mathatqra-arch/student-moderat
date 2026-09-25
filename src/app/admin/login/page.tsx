@@ -40,27 +40,31 @@ function AdminLoginForm() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [otpCode, setOtpCode] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<number>(0);
   const [userInfo, setUserInfo] = useState<{ name: string; role: string } | null>(null);
   const [otpMode, setOtpMode] = useState<OtpMode>(null);
   const [firebaseReady, setFirebaseReady] = useState<boolean | null>(null);
   const [firebaseVerifier, setFirebaseVerifier] = useState<any>(null);
-  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [recaptchaWidgetId, setRecaptchaWidgetId] = useState<number | null>(null);
 
+  // التحقق من إعدادات Firebase عند التحميل
   useEffect(() => {
     fetch("/api/admin/firebase/setup")
       .then((res) => res.json())
       .then((data) => {
         setFirebaseReady(data.ready);
-        if (data.ready) loadFirebaseClient();
+        if (data.ready && data.client_configured) {
+          loadFirebaseClient();
+        }
       })
       .catch(() => setFirebaseReady(false));
   }, []);
 
+  // تحميل Firebase client SDK ديناميكياً (browser only)
   async function loadFirebaseClient() {
+    if (typeof window === "undefined") return;
     try {
-      const { initializeApp } = await import("firebase/app");
+      const { initializeApp, getApps, getApp } = await import("firebase/app");
       const { getAuth, RecaptchaVerifier, signInWithPhoneNumber } = await import("firebase/auth");
 
       const firebaseConfig = {
@@ -72,18 +76,54 @@ function AdminLoginForm() {
         appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
       };
 
-      const app = initializeApp(firebaseConfig);
+      // تجنب إعادة التهيئة
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       const auth = getAuth(app);
+
+      // إنشاء RecaptchaVerifier (invisible)
+      // ملاحظة: v12 يدعم الـ callback + 'size: invisible'
       const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
-        callback: () => {},
-        "expired-callback": () => {},
+        callback: (response: any) => {
+          console.log("[Firebase] reCAPTCHA solved:", response);
+        },
+        "expired-callback": () => {
+          console.warn("[Firebase] reCAPTCHA expired — will reset");
+          resetRecaptcha();
+        },
+        "error-callback": () => {
+          console.error("[Firebase] reCAPTCHA error");
+          setErrorMsg("تعذّر التحقق من reCAPTCHA. حدّث الصفحة وحاول مرة أخرى.");
+        },
       });
 
+      // render لضمان عمل الـ invisible reCAPTCHA
+      try {
+        const widgetId = await verifier.render();
+        setRecaptchaWidgetId(widgetId);
+        console.log("[Firebase] reCAPTCHA rendered, widgetId:", widgetId);
+      } catch (renderErr) {
+        console.warn("[Firebase] reCAPTCHA render failed (non-fatal):", renderErr);
+      }
+
       setFirebaseVerifier({ auth, verifier, signInWithPhoneNumber });
-    } catch (err) {
-      console.error("Failed to load Firebase client:", err);
+      console.log("[Firebase] Client SDK loaded successfully");
+    } catch (err: any) {
+      console.error("[Firebase] Failed to load client SDK:", err);
       setFirebaseReady(false);
+    }
+  }
+
+  // إعادة تعيين reCAPTCHA عند الخطأ
+  function resetRecaptcha() {
+    if (firebaseVerifier?.verifier && typeof window !== "undefined" && (window as any).grecaptcha) {
+      try {
+        firebaseVerifier.verifier.clear();
+        // إعادة إنشاء الـ verifier
+        loadFirebaseClient();
+      } catch (err) {
+        console.warn("[Firebase] reCAPTCHA reset failed:", err);
+      }
     }
   }
 
@@ -109,14 +149,13 @@ function AdminLoginForm() {
     setLoading(true);
     setErrorMsg(null);
     setInfoMsg(null);
-    setOtpCode(null);
-    setQuotaWarning(null);
 
     console.log("[OTP] Starting send flow", {
       phone,
       firebaseReady,
       firebaseVerifierReady: Boolean(firebaseVerifier),
       location: typeof window !== "undefined" ? window.location.origin : "",
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
     });
 
     try {
@@ -125,6 +164,17 @@ function AdminLoginForm() {
         try {
           const normalizedPhone = normalizePhoneForFirebase(phone);
           console.log("[OTP] Calling Firebase signInWithPhoneNumber:", normalizedPhone);
+
+          // التأكد من إن reCAPTCHA جاهز
+          if (!recaptchaWidgetId && firebaseVerifier.verifier) {
+            try {
+              const widgetId = await firebaseVerifier.verifier.render();
+              setRecaptchaWidgetId(widgetId);
+              console.log("[Firebase] reCAPTCHA rendered lazily, widgetId:", widgetId);
+            } catch (renderErr) {
+              console.warn("[Firebase] Lazy render failed:", renderErr);
+            }
+          }
 
           const confirmationResult = await firebaseVerifier.signInWithPhoneNumber(
             firebaseVerifier.auth,
@@ -141,31 +191,47 @@ function AdminLoginForm() {
         } catch (err: any) {
           console.error("[OTP] ❌ Firebase failed:", err.code, err.message);
 
+          // إعادة تعيين reCAPTCHA عند الخطأ (موصى به من الوثائق الرسمية)
+          if (firebaseVerifier?.verifier && recaptchaWidgetId !== null) {
+            try {
+              if (typeof window !== "undefined" && (window as any).grecaptcha) {
+                (window as any).grecaptcha.reset(recaptchaWidgetId);
+                console.log("[Firebase] reCAPTCHA reset");
+              }
+            } catch (resetErr) {
+              console.warn("[Firebase] reCAPTCHA reset failed:", resetErr);
+            }
+          }
+
           // تشخيص السبب وإظهار رسالة خطأ واضحة (بدون عرض الكود)
           if (err.code === "auth/quota-exceeded") {
             setErrorMsg(
               "تم تجاوز الحصة اليومية من Firebase (10 SMS). حاول مرة أخرى غداً أو تواصل مع المشرف لرفع الحصة."
             );
           } else if (err.code === "auth/invalid-phone-number") {
-            setErrorMsg("رقم الهاتف غير صالح. الصيغة الصحيحة: +201012345678");
+            setErrorMsg("رقم الهاتف غير صالح. الصيغة الصحيحة: +201012345678 أو 01012345678");
           } else if (err.code === "auth/too-many-requests") {
             setErrorMsg("محاولات كثيرة من هذا الـ IP. انتظر 5 دقائق ثم حاول مرة أخرى.");
           } else if (err.code === "auth/captcha-check-failed") {
-            setErrorMsg("تعذّر التحقق من reCAPTCHA. حدّث الصفحة وحاول مرة أخرى.");
+            setErrorMsg("تعذّر التحقق من reCAPTCHA. سيتم تحديث الصفحة تلقائياً — حاول مرة أخرى.");
+            // إعادة تحميل reCAPTCHA بالكامل
+            setTimeout(() => window.location.reload(), 1500);
           } else if (err.code === "auth/operation-not-allowed") {
             setErrorMsg(
-              "خدمة Phone Auth غير مُفعّلة في Firebase Console. تواصل مع المشرف."
+              "خدمة Phone Auth غير مُفعّلة في Firebase Console. تواصل مع المشرف لتفعيلها."
             );
-          } else if (err.code === "auth/api-key-not-valid") {
+          } else if (err.code === "auth/api-key-not-valid" || err.code === "auth/invalid-api-key") {
             setErrorMsg("إعدادات Firebase غير صحيحة (API Key). تواصل مع المشرف.");
           } else if (err.code === "auth/invalid-verification-code") {
             setErrorMsg("رمز التحقق غير صحيح أو منتهي. اطلب رمزاً جديداً.");
+          } else if (err.code === "auth/network-request-failed") {
+            setErrorMsg("تعذّر الاتصال بشبكة Firebase. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.");
           } else if (
             err.message?.includes("auth/invalid-api-key") ||
             err.message?.includes("XMLHttpRequest")
           ) {
             setErrorMsg(
-              "تعذّر الاتصال بـ Firebase. تأكد من إضافة domain لهذا الموقع في Firebase Console."
+              "تعذّر الاتصال بـ Firebase. تأكد من إضافة domain لهذا الموقع في Firebase Console → Authentication → Settings → Authorized domains."
             );
           } else {
             setErrorMsg(
@@ -560,9 +626,7 @@ function AdminLoginForm() {
                   setCode("");
                   setErrorMsg(null);
                   setInfoMsg(null);
-                  setOtpCode(null);
                   setOtpMode(null);
-                  setQuotaWarning(null);
                 }}
                 className="text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))] transition"
               >

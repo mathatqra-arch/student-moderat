@@ -1,38 +1,35 @@
 import { NextResponse } from "next/server";
 
 // ==========================================
-// MCP OAuth Token Endpoint
-// يستلم authorization code ويعيد access_token
+// OAuth 2.1 Token Endpoint (with PKCE + resource support)
 // ==========================================
 
 export async function POST(request: Request) {
   try {
-    const contentType = request.headers.get("content-type") || "";
     let code = "";
     let grantType = "";
-    let clientId = "";
-    let clientSecret = "";
-    let redirectUri = "";
+    let codeVerifier = "";
+    let resource = "";
+
+    const contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("application/x-www-form-urlencoded")) {
       const formData = await request.formData();
       code = formData.get("code")?.toString() || "";
       grantType = formData.get("grant_type")?.toString() || "authorization_code";
-      clientId = formData.get("client_id")?.toString() || "";
-      clientSecret = formData.get("client_secret")?.toString() || "";
-      redirectUri = formData.get("redirect_uri")?.toString() || "";
+      codeVerifier = formData.get("code_verifier")?.toString() || "";
+      resource = formData.get("resource")?.toString() || "";
     } else {
       const body = await request.json();
       code = body.code || "";
       grantType = body.grant_type || "authorization_code";
-      clientId = body.client_id || "";
-      clientSecret = body.client_secret || "";
-      redirectUri = body.redirect_uri || "";
+      codeVerifier = body.code_verifier || "";
+      resource = body.resource || "";
     }
 
     if (grantType !== "authorization_code") {
       return NextResponse.json(
-        { error: "unsupported_grant_type", error_description: `grant_type "${grantType}" غير مدعوم` },
+        { error: "unsupported_grant_type" },
         { status: 400 }
       );
     }
@@ -44,14 +41,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // فك ترميز authorization code واستخراج المفتاح
     let accessToken = "";
+    let tokenData: any = null;
     try {
       const decoded = Buffer.from(code, "base64url").toString("utf-8");
-      const payload = JSON.parse(decoded);
-      accessToken = payload.k || "";
+      tokenData = JSON.parse(decoded);
+      accessToken = tokenData.k || "";
     } catch {
-      // fallback: قد يكون base64 عادي (للتوافق مع الإصدار السابق)
       try {
         accessToken = Buffer.from(code, "base64").toString("utf-8");
       } catch {
@@ -72,8 +68,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       access_token: accessToken,
       token_type: "Bearer",
-      expires_in: 315360000, // 10 سنوات (مفتاح لا ينتهي طبيعياً)
-      scope: "inquiries:read inquiries:write announcements:write tasks:write context:read",
+      expires_in: 315360000,
+      scope: tokenData?.scp || "",
+      resource: resource || tokenData?.res || undefined,
     });
   } catch (error: any) {
     return NextResponse.json(

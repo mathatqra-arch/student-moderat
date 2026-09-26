@@ -501,7 +501,7 @@ export async function GET(request: Request) {
     status: "online",
     name: "Student Management MCP Server",
     version: "2.0.0",
-    protocolVersion: "2025-03-26",
+    protocolVersion: "2025-06-18",
     capabilities: {
       tools: { listChanged: false },
       resources: {},
@@ -550,21 +550,24 @@ export async function POST(request: Request) {
   // 1. التحقق من المصادقة
   const authResult = await verifyAuth(request);
   if (!authResult.authorized) {
-    return NextResponse.json(
-      {
+    // RFC 9728: إرجاع WWW-Authenticate header مع resource_metadata URL
+    const host = request.headers.get("host") || "student-moderat.mathatqra.workers.dev";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const metaUrl = `${proto}://${host}/.well-known/oauth-protected-resource`;
+
+    return new NextResponse(
+      JSON.stringify({
         jsonrpc: "2.0",
-        error: {
-          code: -32001,
-          message:
-            authResult.reason === "missing_token"
-              ? "Unauthorized: مطلوب Authorization Bearer أو x-api-key"
-              : authResult.reason === "invalid_or_revoked_key"
-              ? "Unauthorized: مفتاح غير صالح أو ملغي"
-              : "Unauthorized: فشل التحقق من المصادقة",
-        },
+        error: { code: -32001, message: "Unauthorized" },
         id: null,
-      },
-      { status: 401 }
+      }),
+      {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": `Bearer resource_metadata="${metaUrl}"`,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 
@@ -617,7 +620,7 @@ async function handleSingleRequest(body: any): Promise<NextResponse> {
     const response = NextResponse.json({
       jsonrpc: "2.0",
       result: {
-        protocolVersion: "2025-03-26",
+        protocolVersion: "2025-06-18",
         capabilities: {
           tools: { listChanged: false },
           resources: {},

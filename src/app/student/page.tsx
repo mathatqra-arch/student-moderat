@@ -7,6 +7,7 @@ import AnnouncementsFeed from "@/components/student/AnnouncementsFeed";
 import TasksTracker from "@/components/student/TasksTracker";
 import InquiryForm from "@/components/student/InquiryForm";
 import QuickLinksSection from "@/components/student/QuickLinksSection";
+import { PWAPrompts } from "@/components/ui/pwa/Prompts";
 
 export default function StudentPage() {
   const [activeTab, setActiveTab] = useState<"announcements" | "tasks" | "inquiry" | "links">("announcements");
@@ -25,6 +26,9 @@ export default function StudentPage() {
       </main>
 
       <StudentNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* PWA Prompts - Install + Notifications */}
+      <PWAPrompts />
     </div>
   );
 }

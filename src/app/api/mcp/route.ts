@@ -443,103 +443,12 @@ function cleanupExpiredSessions() {
 }
 
 // ==========================================
-// GET: Server Probe & Discovery Metadata
+// GET: 405 Method Not Allowed (Streamable HTTP - no GET support)
 // ==========================================
-export async function GET(request: Request) {
-  const host = request.headers.get("host") || "localhost:3000";
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const baseUrl = `${protocol}://${host}`;
-
-  // إذا طلب العميل SSE — ابدأ جلسة SSE
-  const acceptHeader = request.headers.get("accept") || "";
-  if (acceptHeader.includes("text/event-stream")) {
-    const sessionId = randomUUID();
-    mcpSessions.set(sessionId, { createdAt: Date.now(), lastActivity: Date.now() });
-
-    const stream = new ReadableStream({
-      start(controller) {
-        const encoder = new TextEncoder();
-        // إرسال endpoint event كما يتوقع MCP client
-        const initEvent = `event: endpoint\ndata: ${baseUrl}/api/mcp?sessionId=${sessionId}\n\n`;
-        controller.enqueue(encoder.encode(initEvent));
-
-        // Keep-alive كل 30 ثانية
-        const keepAlive = setInterval(() => {
-          try {
-            controller.enqueue(encoder.encode(`: keepalive\n\n`));
-          } catch {
-            clearInterval(keepAlive);
-          }
-        }, 30000);
-
-        // تنظيف عند الإغلاق
-        const cleanup = () => {
-          clearInterval(keepAlive);
-          mcpSessions.delete(sessionId);
-          try {
-            controller.close();
-          } catch {}
-        };
-
-        // إغلاق بعد انتهاء الجلسة (1 ساعة)
-        setTimeout(cleanup, SESSION_TTL_MS);
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "Mcp-Session-Id": sessionId,
-      },
-    });
-  }
-
-  // استجابة JSON للـ discovery
-  return NextResponse.json({
-    status: "online",
-    name: "Student Management MCP Server",
-    version: "2.0.0",
-    protocolVersion: "2025-06-18",
-    capabilities: {
-      tools: { listChanged: false },
-      resources: {},
-      prompts: {},
-      logging: {},
-    },
-    authentication: {
-      types_supported: ["api_key", "bearer", "oauth2"],
-      schemes: {
-        bearer: {
-          type: "http",
-          scheme: "bearer",
-          description: "استخدم Authorization: Bearer <bmp_key_...>",
-        },
-        api_key: {
-          type: "apiKey",
-          in: "header",
-          name: "x-api-key",
-          description: "أو استخدم x-api-key: <bmp_key_...>",
-        },
-        oauth2: {
-          type: "oauth2",
-          flows: {
-            authorizationCode: {
-              authorizationUrl: `${baseUrl}/api/mcp/oauth/authorize`,
-              tokenUrl: `${baseUrl}/api/mcp/oauth/token`,
-              scopes: {},
-            },
-          },
-        },
-      },
-    },
-    endpoints: {
-      mcp: `${baseUrl}/api/mcp`,
-      openapi: `${baseUrl}/api/mcp/openapi.json`,
-      health: `${baseUrl}/api/health`,
-    },
-    tools_count: MCP_TOOLS.length,
+export async function GET() {
+  return new NextResponse("Method Not Allowed", {
+    status: 405,
+    headers: { Allow: "POST" },
   });
 }
 

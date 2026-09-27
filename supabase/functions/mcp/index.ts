@@ -427,29 +427,30 @@ async function handleJsonRpc(body: any, supabase: any): Promise<Response> {
 async function handleRequest(req: Request, supabase: any) {
   const url = new URL(req.url);
   const path = url.pathname;
+  const base = getBaseUrl(req);
+  const mcpUrl = `${base}/functions/v1/mcp`;
 
   // === OAuth endpoints ===
+  // ملاحظة: ChatGPT بيجيب الـ endpoints دي من WWW-Authenticate header
+  // فلازم تكون على نفس الـ MCP URL path
 
   // .well-known/oauth-protected-resource (RFC 9728)
-  if (path === "/.well-known/oauth-protected-resource" || path === "/functions/v1/mcp/.well-known/oauth-protected-resource" || path.endsWith("/.well-known/oauth-protected-resource")) {
-    const base = getBaseUrl(req);
-    const mcpUrl = `${base}/functions/v1/mcp`;
+  if (path.endsWith("/.well-known/oauth-protected-resource")) {
     return jsonResponse({
       resource: mcpUrl,
-      authorization_servers: [base],
+      authorization_servers: [mcpUrl], // نفس MCP URL عشان ChatGPT يجيب AS metadata من نفس الـ path
       bearer_methods_supported: ["header"],
       scopes_supported: [],
     });
   }
 
   // .well-known/oauth-authorization-server (RFC 8414)
-  if (path === "/.well-known/oauth-authorization-server" || path.endsWith("/.well-known/oauth-authorization-server")) {
-    const base = getBaseUrl(req);
+  if (path.endsWith("/.well-known/oauth-authorization-server")) {
     return jsonResponse({
-      issuer: base,
-      authorization_endpoint: `${base}/functions/v1/mcp/oauth/authorize`,
-      token_endpoint: `${base}/functions/v1/mcp/oauth/token`,
-      registration_endpoint: `${base}/functions/v1/mcp/oauth/register`,
+      issuer: mcpUrl,
+      authorization_endpoint: `${mcpUrl}/oauth/authorize`,
+      token_endpoint: `${mcpUrl}/oauth/token`,
+      registration_endpoint: `${mcpUrl}/oauth/register`,
       response_types_supported: ["code"],
       response_modes_supported: ["query"],
       grant_types_supported: ["authorization_code", "refresh_token"],
@@ -462,7 +463,7 @@ async function handleRequest(req: Request, supabase: any) {
   }
 
   // Dynamic Client Registration (RFC 7591)
-  if (path === "/functions/v1/mcp/oauth/register" && req.method === "POST") {
+  if (path.endsWith("/oauth/register") && req.method === "POST") {
     try {
       const body = await req.json().catch(() => ({}));
       const clientId = "mcp_client_" + crypto.randomUUID().replace(/-/g, "").substring(0, 24);
@@ -488,9 +489,9 @@ async function handleRequest(req: Request, supabase: any) {
   }
 
   // OAuth Authorize endpoint
-  if (path === "/functions/v1/mcp/oauth/authorize") {
+  if (path.endsWith("/oauth/authorize")) {
     if (req.method === "GET") {
-      const params = new URL(req.url).searchParams;
+      const params = url.searchParams;
       const redirectUri = params.get("redirect_uri") || "";
       const state = params.get("state") || "";
       const clientId = params.get("client_id") || "";
@@ -521,7 +522,7 @@ async function handleRequest(req: Request, supabase: any) {
       <p class="text-xs text-gray-400">أدخل مفتاح الـ API المولّد من لوحة الأدمن لتأكيد الربط.</p>
     </div>
     ${errorParam ? `<div class="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl text-center">${errorParam}</div>` : ""}
-    <form method="POST" action="/functions/v1/mcp/oauth/authorize" class="space-y-4">
+    <form method="POST" action="${mcpUrl}/oauth/authorize" class="space-y-4">
       <input type="hidden" name="redirect_uri" value="${redirectUri.replace(/"/g, "&quot;")}" />
       <input type="hidden" name="state" value="${state.replace(/"/g, "&quot;")}" />
       <input type="hidden" name="client_id" value="${clientId.replace(/"/g, "&quot;")}" />
@@ -566,7 +567,7 @@ async function handleRequest(req: Request, supabase: any) {
 
         const { valid, keyId, name } = await verifyApiKey(supabase, apiKey);
         if (!valid) {
-          const errUrl = new URL("/functions/v1/mcp/oauth/authorize", url.origin);
+          const errUrl = new URL(`${mcpUrl}/oauth/authorize`);
           errUrl.searchParams.set("redirect_uri", redirectUri);
           errUrl.searchParams.set("state", state);
           errUrl.searchParams.set("client_id", clientId);
@@ -588,16 +589,14 @@ async function handleRequest(req: Request, supabase: any) {
           res: resource,
           scp: scope,
         };
-        // base64url encode
         const jsonString = JSON.stringify(codePayload);
         const b64 = btoa(unescape(encodeURIComponent(jsonString)))
           .replace(/\+/g, "-")
           .replace(/\//g, "_")
           .replace(/=/g, "");
-        const authCode = b64;
 
         const callbackUrl = new URL(redirectUri);
-        callbackUrl.searchParams.set("code", authCode);
+        callbackUrl.searchParams.set("code", b64);
         if (state) callbackUrl.searchParams.set("state", state);
 
         return Response.redirect(callbackUrl.toString(), 307);
@@ -608,7 +607,7 @@ async function handleRequest(req: Request, supabase: any) {
   }
 
   // OAuth Token endpoint
-  if (path === "/functions/v1/mcp/oauth/token" && req.method === "POST") {
+  if (path.endsWith("/oauth/token") && req.method === "POST") {
     try {
       let code = "";
       let grantType = "";
@@ -638,7 +637,6 @@ async function handleRequest(req: Request, supabase: any) {
         );
       }
 
-      // فك base64url
       let tokenData: any = null;
       let accessToken = "";
       try {
@@ -681,7 +679,7 @@ async function handleRequest(req: Request, supabase: any) {
   // === MCP endpoints ===
 
   // GET: 405 Method Not Allowed (Streamable HTTP)
-  if (req.method === "GET" && path === "/functions/v1/mcp") {
+  if (req.method === "GET" && (path === "/functions/v1/mcp" || path.endsWith("/functions/v1/mcp"))) {
     return new Response("Method Not Allowed", {
       status: 405,
       headers: { ...corsHeaders, Allow: "POST" },
@@ -689,17 +687,16 @@ async function handleRequest(req: Request, supabase: any) {
   }
 
   // DELETE: end session
-  if (req.method === "DELETE" && path === "/functions/v1/mcp") {
+  if (req.method === "DELETE" && (path === "/functions/v1/mcp" || path.endsWith("/functions/v1/mcp"))) {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   // POST: MCP JSON-RPC
-  if (req.method === "POST" && path === "/functions/v1/mcp") {
+  if (req.method === "POST" && (path === "/functions/v1/mcp" || path.endsWith("/functions/v1/mcp"))) {
     // المصادقة
     const authResult = await verifyAuth(req, supabase);
     if (!authResult.authorized) {
-      const base = getBaseUrl(req);
-      const metaUrl = `${base}/functions/v1/mcp/.well-known/oauth-protected-resource`;
+      const metaUrl = `${mcpUrl}/.well-known/oauth-protected-resource`;
 
       return new Response(
         JSON.stringify({
@@ -722,12 +719,8 @@ async function handleRequest(req: Request, supabase: any) {
       const body = await req.json();
       if (Array.isArray(body)) {
         const results = await Promise.all(
-          body.map(async (req) => {
-            // ملاحظة: handleJsonRpc بيرجع Response، فهنحتاج نتجاهل الـ supabase هنا
-            return await handleJsonRpc(req, supabase);
-          })
+          body.map(async (req) => await handleJsonRpc(req, supabase))
         );
-        // لو كلها JSON، نرجعها كـ array
         if (results.length === 1) return results[0];
         return jsonResponse(results.map((r: any) => r));
       }

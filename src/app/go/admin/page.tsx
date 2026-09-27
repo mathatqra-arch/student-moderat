@@ -9,21 +9,17 @@ import {
   Key,
   LogOut,
   ExternalLink,
-  Server,
   Calendar,
-  BookOpen,
-  Clock,
 } from "lucide-react";
 import InquiriesManager from "@/components/admin/InquiriesManager";
 import ContentManager from "@/components/admin/ContentManager";
 import TeamManager from "@/components/admin/TeamManager";
 import ApiKeyManager from "@/components/admin/ApiKeyManager";
 import ScheduleManager from "@/components/admin/ScheduleManager";
-import McpPage from "@/app/admin/mcp/page";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import Link from "next/link";
 
-type TabId = "inquiries" | "content" | "schedules" | "team" | "keys" | "mcp";
+type TabId = "inquiries" | "content" | "schedules" | "team" | "keys";
 
 interface TabConfig {
   id: TabId;
@@ -37,7 +33,6 @@ const TABS: TabConfig[] = [
   { id: "content", label: "الإعلانات والتكليفات", shortLabel: "المحتوى", icon: FileText },
   { id: "schedules", label: "الجداول والمواد", shortLabel: "الجداول", icon: Calendar },
   { id: "keys", label: "مفاتيح API", shortLabel: "المفاتيح", icon: Key },
-  { id: "mcp", label: "خادم MCP", shortLabel: "MCP", icon: Server },
   { id: "team", label: "الفريق والصلاحيات", shortLabel: "الفريق", icon: Users },
 ];
 
@@ -87,16 +82,13 @@ export default function AdminDashboardPage() {
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
-            const isMcp = tab.id === "mcp";
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 min-w-[110px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                   isActive
-                    ? isMcp
-                      ? "gradient-purple text-white shadow-lg shadow-purple-600/25"
-                      : "gradient-brand text-white shadow-lg shadow-brand-600/25"
+                    ? "gradient-brand text-white shadow-lg shadow-brand-600/25"
                     : "text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))] hover:bg-[rgb(var(--surface-subtle))]"
                 }`}
               >
@@ -113,7 +105,6 @@ export default function AdminDashboardPage() {
           {activeTab === "content" && <ContentManager />}
           {activeTab === "schedules" && <ScheduleManager />}
           {activeTab === "keys" && <ApiKeyManager />}
-          {activeTab === "mcp" && <McpPage />}
           {activeTab === "team" && <TeamManager />}
         </div>
       </main>

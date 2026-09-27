@@ -223,6 +223,160 @@ const MCP_TOOLS = [
       required: ["submission_id"],
     },
   },
+
+  // === أدوات CRUD جديدة للتحكم الكامل ===
+
+  // --- الإعلانات ---
+  {
+    name: "update_announcement",
+    description: "تعديل إعلان موجود (العنوان، المحتوى، التصنيف، التثبيت).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        announcement_id: { type: "string" },
+        title: { type: "string" },
+        content: { type: "string" },
+        category: { type: "string", enum: ["عاجل", "أكاديمي", "هام", "عام"] },
+        is_pinned: { type: "boolean" },
+      },
+      required: ["announcement_id"],
+    },
+  },
+  {
+    name: "delete_announcement",
+    description: "حذف إعلان نهائياً.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        announcement_id: { type: "string" },
+      },
+      required: ["announcement_id"],
+    },
+  },
+
+  // --- التكليفات ---
+  {
+    name: "update_task",
+    description: "تعديل تكليف موجود (العنوان، الوصف، الموعد النهائي، الحالة).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        deadline: { type: "string", description: "ISO 8601" },
+        status: { type: "string", enum: ["active", "closed"] },
+      },
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "delete_task",
+    description: "حذف تكليف نهائياً.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+      },
+      required: ["task_id"],
+    },
+  },
+
+  // --- الجداول ---
+  {
+    name: "add_schedule_session",
+    description: "إضافة جلسة جديدة للجدول الأسبوعي.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        subject_name: { type: "string", description: "اسم المادة" },
+        day_of_week: { type: "integer", description: "0=الأحد، 1=الإثنين، ..., 6=السبت" },
+        start_time: { type: "string", description: "صيغة HH:MM" },
+        end_time: { type: "string", description: "صيغة HH:MM" },
+        room: { type: "string" },
+        type: { type: "string", enum: ["lecture", "lab", "tutorial", "exam"], default: "lecture" },
+      },
+      required: ["subject_name", "day_of_week", "start_time", "end_time"],
+    },
+  },
+  {
+    name: "delete_schedule_session",
+    description: "حذف جلسة من الجدول الأسبوعي.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        schedule_id: { type: "string" },
+      },
+      required: ["schedule_id"],
+    },
+  },
+
+  // --- المواد ---
+  {
+    name: "add_subject",
+    description: "إضافة مادة دراسية جديدة.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        code: { type: "string" },
+        instructor: { type: "string" },
+        color: { type: "string", description: "hex color (مثلاً: #3b82f6)", default: "#3b82f6" },
+      },
+      required: ["name"],
+    },
+  },
+
+  // --- المواعيد المهمة ---
+  {
+    name: "delete_important_date",
+    description: "حذف موعد مهم.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date_id: { type: "string" },
+      },
+      required: ["date_id"],
+    },
+  },
+
+  // --- الاستفسارات ---
+  {
+    name: "delete_inquiry",
+    description: "حذف استفسار نهائياً.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        inquiry_id: { type: "string" },
+      },
+      required: ["inquiry_id"],
+    },
+  },
+  {
+    name: "archive_inquiry",
+    description: "أرشفة استفسار (تغيير حالته إلى archived).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        inquiry_id: { type: "string" },
+      },
+      required: ["inquiry_id"],
+    },
+  },
+
+  // --- البحث الشامل ---
+  {
+    name: "search",
+    description: "بحث شامل في كل المحتوى (إعلانات، تكليفات، استفسارات، مواعيد).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "نص البحث" },
+        limit: { type: "integer", default: 20 },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 // ==========================================
@@ -581,6 +735,134 @@ async function executeTool(supabase: any, name: string, args: any) {
       return {
         content: [{ type: "text", text: `✅ تم مراجعة التسليم.\n\n${JSON.stringify(data[0], null, 2)}` }],
       };
+    }
+
+    // === أدوات CRUD الجديدة ===
+
+    case "update_announcement": {
+      const { announcement_id, title, content, category, is_pinned } = args || {};
+      if (!announcement_id) throw new Error("announcement_id مطلوب");
+      const updateData: any = {};
+      if (title?.trim()) updateData.title = title.trim();
+      if (content?.trim()) updateData.content = content.trim();
+      if (category) updateData.category = category;
+      if (typeof is_pinned === "boolean") updateData.is_pinned = is_pinned;
+      const { data, error } = await supabase.from("announcements").update(updateData).eq("id", announcement_id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error(`لم يتم العثور على إعلان: ${announcement_id}`);
+      return { content: [{ type: "text", text: `✅ تم تعديل الإعلان.\n\n${JSON.stringify(data[0], null, 2)}` }] };
+    }
+
+    case "delete_announcement": {
+      const { announcement_id } = args || {};
+      if (!announcement_id) throw new Error("announcement_id مطلوب");
+      const { error } = await supabase.from("announcements").delete().eq("id", announcement_id);
+      if (error) throw error;
+      return { content: [{ type: "text", text: `🗑️ تم حذف الإعلان ${announcement_id}` }] };
+    }
+
+    case "update_task": {
+      const { task_id, title, description, deadline, status } = args || {};
+      if (!task_id) throw new Error("task_id مطلوب");
+      const updateData: any = {};
+      if (title?.trim()) updateData.title = title.trim();
+      if (description !== undefined) updateData.description = description.trim();
+      if (deadline) {
+        const d = new Date(deadline);
+        if (isNaN(d.getTime())) throw new Error("صيغة deadline غير صالحة");
+        updateData.deadline = d.toISOString();
+      }
+      if (status) updateData.status = status;
+      const { data, error } = await supabase.from("tasks").update(updateData).eq("id", task_id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error(`لم يتم العثور على تكليف: ${task_id}`);
+      return { content: [{ type: "text", text: `✅ تم تعديل التكليف.\n\n${JSON.stringify(data[0], null, 2)}` }] };
+    }
+
+    case "delete_task": {
+      const { task_id } = args || {};
+      if (!task_id) throw new Error("task_id مطلوب");
+      const { error } = await supabase.from("tasks").delete().eq("id", task_id);
+      if (error) throw error;
+      return { content: [{ type: "text", text: `🗑️ تم حذف التكليف ${task_id}` }] };
+    }
+
+    case "add_schedule_session": {
+      const { subject_name, day_of_week, start_time, end_time, room, type } = args || {};
+      if (!subject_name || day_of_week === undefined || !start_time || !end_time) throw new Error("subject_name, day_of_week, start_time, end_time مطلوبة");
+      // ابحث عن المادة بالاسم
+      const { data: subj } = await supabase.from("subjects").select("id").ilike("name", `%${subject_name}%`).single();
+      if (!subj) throw new Error(`لم يتم العثور على مادة: ${subject_name}`);
+      const { data, error } = await supabase.from("schedules").insert([{
+        subject_id: subj.id, day_of_week, start_time, end_time,
+        room: room || null, type: type || "lecture", is_active: true,
+      }]).select();
+      if (error) throw error;
+      return { content: [{ type: "text", text: `📅 تم إضافة الجلسة.\n\n${JSON.stringify(data?.[0] || {}, null, 2)}` }] };
+    }
+
+    case "delete_schedule_session": {
+      const { schedule_id } = args || {};
+      if (!schedule_id) throw new Error("schedule_id مطلوب");
+      const { error } = await supabase.from("schedules").delete().eq("id", schedule_id);
+      if (error) throw error;
+      return { content: [{ type: "text", text: `🗑️ تم حذف الجلسة ${schedule_id}` }] };
+    }
+
+    case "add_subject": {
+      const { name, code, instructor, color } = args || {};
+      if (!name?.trim()) throw new Error("name مطلوب");
+      const { data, error } = await supabase.from("subjects").insert([{
+        name: name.trim(), code: code || null, instructor: instructor || null, color: color || "#3b82f6",
+      }]).select();
+      if (error) throw error;
+      return { content: [{ type: "text", text: `📚 تم إضافة المادة.\n\n${JSON.stringify(data?.[0] || {}, null, 2)}` }] };
+    }
+
+    case "delete_important_date": {
+      const { date_id } = args || {};
+      if (!date_id) throw new Error("date_id مطلوب");
+      const { error } = await supabase.from("important_dates").delete().eq("id", date_id);
+      if (error) throw error;
+      return { content: [{ type: "text", text: `🗑️ تم حذف الموعد ${date_id}` }] };
+    }
+
+    case "delete_inquiry": {
+      const { inquiry_id } = args || {};
+      if (!inquiry_id) throw new Error("inquiry_id مطلوب");
+      const { error } = await supabase.from("inquiries").delete().eq("id", inquiry_id);
+      if (error) throw error;
+      return { content: [{ type: "text", text: `🗑️ تم حذف الاستفسار ${inquiry_id}` }] };
+    }
+
+    case "archive_inquiry": {
+      const { inquiry_id } = args || {};
+      if (!inquiry_id) throw new Error("inquiry_id مطلوب");
+      const { data, error } = await supabase.from("inquiries").update({ status: "archived", updated_at: new Date().toISOString() }).eq("id", inquiry_id).select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error(`لم يتم العثور على استفسار: ${inquiry_id}`);
+      return { content: [{ type: "text", text: `📦 تم أرشفة الاستفسار.\n\n${JSON.stringify(data[0], null, 2)}` }] };
+    }
+
+    case "search": {
+      const query = args?.query?.trim();
+      const limit = Math.min(args?.limit || 20, 50);
+      if (!query) throw new Error("query مطلوب");
+      const [annRes, taskRes, inqRes, dateRes] = await Promise.all([
+        supabase.from("announcements").select("*").or(`title.ilike.%${query}%,content.ilike.%${query}%`).limit(limit),
+        supabase.from("tasks").select("*").or(`title.ilike.%${query}%,subject.ilike.%${query}%,description.ilike.%${query}%`).limit(limit),
+        supabase.from("inquiries").select("*").or(`full_name.ilike.%${query}%,message.ilike.%${query}%`).limit(limit),
+        supabase.from("important_dates").select("*").or(`title.ilike.%${query}%,description.ilike.%${query}%`).limit(limit),
+      ]);
+      const results = {
+        query,
+        announcements: annRes.data || [],
+        tasks: taskRes.data || [],
+        inquiries: inqRes.data || [],
+        important_dates: dateRes.data || [],
+        total_results: (annRes.data?.length || 0) + (taskRes.data?.length || 0) + (inqRes.data?.length || 0) + (dateRes.data?.length || 0),
+      };
+      return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
     }
 
     case "get_inquiry_stats": {

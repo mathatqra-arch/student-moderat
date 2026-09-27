@@ -86,6 +86,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 7. دالة للحصول على كل المستخدمين تحت مستخدم معيّن (recursive)
+-- استخدام loop بدلاً من WITH RECURSIVE (متوافق مع كل إصدارات PostgreSQL)
 CREATE OR REPLACE FUNCTION public.get_descendants(p_user_id UUID)
 RETURNS TABLE (
     id UUID,
@@ -96,24 +97,58 @@ RETURNS TABLE (
     permissions JSONB,
     depth INT
 ) AS $$
-WITH RECURSIVE descendants AS (
-    -- المستوى الأول: direct children
+DECLARE
+    current_parent_id UUID;
+    current_depth INT := 1;
+BEGIN
+    -- نبدأ من المستخدم المحدد
+    current_parent_id := (
+        SELECT id FROM public.team_members WHERE user_id = p_user_id LIMIT 1
+    );
+
+    -- لو المستخدم مش موجود، نرجع فارغ
+    IF current_parent_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    -- نضيف الأطفال المباشرين
+    RETURN QUERY
     SELECT
         tm.id, tm.user_id, tm.name, tm.role, tm.parent_id, tm.permissions, 1 AS depth
     FROM public.team_members tm
-    WHERE tm.parent_id = (
-        SELECT id FROM public.team_members WHERE user_id = p_user_id LIMIT 1
-    )
+    WHERE tm.parent_id = current_parent_id;
 
-    UNION ALL
+    -- نكرر لكل مستوى
+    LOOP
+        EXIT WHEN NOT EXISTS (
+            SELECT 1 FROM public.team_members
+            WHERE parent_id IN (
+                SELECT id FROM public.team_members
+                WHERE parent_id = current_parent_id
+            )
+        );
 
-    -- المستويات الأعم: descendants of children
-    SELECT
-        tm.id, tm.user_id, tm.name, tm.role, tm.parent_id, tm.permissions, d.depth + 1
-    FROM public.team_members tm
-    INNER JOIN descendants d ON tm.parent_id = d.id
-)
-SELECT * FROM descendants;
+        current_depth := current_depth + 1;
+
+        RETURN QUERY
+        SELECT
+            tm.id, tm.user_id, tm.name, tm.role, tm.parent_id, tm.permissions, current_depth
+        FROM public.team_members tm
+        WHERE tm.parent_id IN (
+            SELECT id FROM public.team_members
+            WHERE parent_id = current_parent_id
+        );
+
+        -- ننتقل للمستوى التالي
+        current_parent_id := (
+            SELECT id FROM public.team_members
+            WHERE parent_id = current_parent_id
+            LIMIT 1
+        );
+
+        EXIT WHEN current_parent_id IS NULL OR current_depth > 10;
+    END LOOP;
+END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 8. دالة للحصول على المستخدمين الذين يظهرهم المستخدم الحالي

@@ -557,15 +557,17 @@ async function handleRequest(req: Request, supabase: any) {
 </body>
 </html>`;
 
-      // إرجاع HTML كـ string عادي (مش bytes) مع headers واضحة
-      // ملاحظة: لازم نستخدم Response مع headers صريحة لتفادي مشاكل الترميز
+      // ملاحظة مهمة: Supabase Edge Functions بترفض أحياناً Content-Type اللي بنبعته
+      // فلازم نستخدم Headers API بشكل صريح لتفادي override
+      const responseHeaders = new Headers();
+      responseHeaders.set("Content-Type", "text/html; charset=utf-8");
+      responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      responseHeaders.set("X-Content-Type-Options", "nosniff");
+      responseHeaders.set("Access-Control-Allow-Origin", "*");
+
       return new Response(html, {
         status: 200,
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "X-Content-Type-Options": "nosniff",
-        },
+        headers: responseHeaders,
       });
     }
 

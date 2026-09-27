@@ -16,9 +16,10 @@ const corsHeaders = {
 };
 
 // ==========================================
-// أدوات MCP
+// أدوات MCP v3.0 — 15 أداة احترافية
 // ==========================================
 const MCP_TOOLS = [
+  // === الاستفسارات ===
   {
     name: "get_pending_inquiries",
     description: "استرجاع قائمة استفسارات الطلاب المعلقة. يدعم تصفية حسب الحالة.",
@@ -48,6 +49,25 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: "resolve_inquiry",
+    description: "إغلاق استفسار وتعليمه كمحلول.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        inquiry_id: { type: "string" },
+        resolution_note: { type: "string" },
+      },
+      required: ["inquiry_id"],
+    },
+  },
+  {
+    name: "get_inquiry_stats",
+    description: "إحصائيات الاستفسارات: العدد الإجمالي، الجديد، قيد المعالجة، المحلول.",
+    inputSchema: { type: "object", properties: {} },
+  },
+
+  // === الإعلانات والتكليفات ===
+  {
     name: "create_announcement",
     description: "نشر إعلان أكاديمي جديد للطلاب.",
     inputSchema: {
@@ -76,25 +96,131 @@ const MCP_TOOLS = [
     },
   },
   {
-    name: "get_batch_context",
-    description: "تزويد الـ AI بسياق شامل عن الدفعة: آخر الإعلانات، المهام النشطة، الروابط.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "get_inquiry_stats",
-    description: "إحصائيات الاستفسارات.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "resolve_inquiry",
-    description: "إغلاق استفسار وتعليمه كمحلول.",
+    name: "get_active_tasks",
+    description: "استرجاع المهام والتكليفات النشطة مع مواعيد التسليم القادمة.",
     inputSchema: {
       type: "object",
       properties: {
-        inquiry_id: { type: "string" },
-        resolution_note: { type: "string" },
+        subject: { type: "string", description: "فلترة حسب اسم المادة (اختياري)" },
+        days_ahead: { type: "integer", default: 14, description: "المهام خلال الأيام القادمة" },
       },
-      required: ["inquiry_id"],
+    },
+  },
+
+  // === الجداول والمواعيد (جديد v3) ===
+  {
+    name: "get_weekly_schedule",
+    description: "استرجاع الجدول الأسبوعي الكامل لكل المواد مع القاعات والأوقات.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        day: {
+          type: "integer",
+          description: "رقم اليوم (0=الأحد، 1=الإثنين، ..., 6=السبت). اختر -1 لكل الأيام.",
+          default: -1,
+        },
+      },
+    },
+  },
+  {
+    name: "get_important_dates",
+    description: "استرجاع المواعيد المهمة القادمة (امتحانات، تسليمات، إجازات).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          enum: ["exam", "deadline", "holiday", "event", "registration", "all"],
+          default: "all",
+        },
+        days_ahead: { type: "integer", default: 30, description: "المواعيد خلال الأيام القادمة" },
+      },
+    },
+  },
+  {
+    name: "add_important_date",
+    description: "إضافة موعد مهم جديد (امتحان، تسليم، إجازة، إلخ).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        date: { type: "string", description: "ISO 8601 format" },
+        type: {
+          type: "string",
+          enum: ["exam", "deadline", "holiday", "event", "registration"],
+          default: "event",
+        },
+        is_pinned: { type: "boolean", default: false },
+      },
+      required: ["title", "date"],
+    },
+  },
+
+  // === المواد الدراسية (جديد v3) ===
+  {
+    name: "get_subjects",
+    description: "استرجاع قائمة المواد الدراسية مع المدرسين والألوان.",
+    inputSchema: { type: "object", properties: {} },
+  },
+
+  // === الحضور والطلاب (جديد v3) ===
+  {
+    name: "get_attendance_stats",
+    description: "إحصائيات الحضور لمادة معينة أو لكل المواد.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        subject: { type: "string", description: "اسم المادة (اختياري)" },
+      },
+    },
+  },
+
+  // === السياق الشامل ===
+  {
+    name: "get_batch_context",
+    description: "تزويد الـ AI بسياق شامل عن الدفعة: آخر الإعلانات، المهام النشطة، الجداول، الروابط، المواعيد المهمة.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_dashboard_stats",
+    description: "إحصائيات شاملة للوحة التحكم: عدد الإعلانات، المهام، الاستفسارات، الطلاب، إلخ.",
+    inputSchema: { type: "object", properties: {} },
+  },
+
+  // === التسليمات (جديد v3) ===
+  {
+    name: "get_submissions",
+    description: "استرجاع تسليمات الطلاب لمهمة معينة.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        status: {
+          type: "string",
+          enum: ["pending", "reviewed", "accepted", "rejected", "all"],
+          default: "pending",
+        },
+      },
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "review_submission",
+    description: "مراجعة تسليم طالب ومنح درجة أو ملاحظات.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        submission_id: { type: "string" },
+        status: {
+          type: "string",
+          enum: ["reviewed", "accepted", "rejected"],
+          default: "reviewed",
+        },
+        grade: { type: "string", description: "الدرجة (مثلاً: 8/10)" },
+        feedback: { type: "string" },
+      },
+      required: ["submission_id"],
     },
   },
 ];
@@ -188,10 +314,13 @@ async function executeTool(supabase: any, name: string, args: any) {
     }
 
     case "get_batch_context": {
-      const [annRes, tasksRes, linksRes] = await Promise.all([
+      const [annRes, tasksRes, linksRes, schedulesRes, datesRes, subjectsRes] = await Promise.all([
         supabase.from("announcements").select("*").order("created_at", { ascending: false }).limit(5),
         supabase.from("tasks").select("*").eq("status", "active").order("deadline", { ascending: true }),
         supabase.from("quick_links").select("*").order("order_index", { ascending: true }),
+        supabase.from("schedules").select("*, subjects(*)").eq("is_active", true).order("day_of_week", { ascending: true }),
+        supabase.from("important_dates").select("*").gte("date", new Date().toISOString()).order("date", { ascending: true }).limit(10),
+        supabase.from("subjects").select("*").order("name", { ascending: true }),
       ]);
       return {
         content: [
@@ -202,6 +331,9 @@ async function executeTool(supabase: any, name: string, args: any) {
                 recent_announcements: annRes.data || [],
                 active_tasks: tasksRes.data || [],
                 academic_links: linksRes.data || [],
+                weekly_schedule: schedulesRes.data || [],
+                upcoming_dates: datesRes.data || [],
+                subjects: subjectsRes.data || [],
                 generated_at: new Date().toISOString(),
               },
               null,
@@ -209,6 +341,245 @@ async function executeTool(supabase: any, name: string, args: any) {
             ),
           },
         ],
+      };
+    }
+
+    case "get_dashboard_stats": {
+      const [annCount, tasksCount, inqCount, usersCount, subjectsCount, schedulesCount, datesCount] = await Promise.all([
+        supabase.from("announcements").select("*", { count: "exact", head: true }),
+        supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("inquiries").select("*", { count: "exact", head: true }),
+        supabase.from("team_members").select("*", { count: "exact", head: true }),
+        supabase.from("subjects").select("*", { count: "exact", head: true }),
+        supabase.from("schedules").select("*", { count: "exact", head: true }).eq("is_active", true),
+        supabase.from("important_dates").select("*", { count: "exact", head: true }).gte("date", new Date().toISOString()),
+      ]);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                announcements: annCount.count || 0,
+                active_tasks: tasksCount.count || 0,
+                inquiries: inqCount.count || 0,
+                team_members: usersCount.count || 0,
+                subjects: subjectsCount.count || 0,
+                active_schedules: schedulesCount.count || 0,
+                upcoming_dates: datesCount.count || 0,
+                generated_at: new Date().toISOString(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    case "get_active_tasks": {
+      const subject = args?.subject;
+      const daysAhead = args?.days_ahead || 14;
+      const futureDate = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
+
+      let query = supabase
+        .from("tasks")
+        .select("*")
+        .eq("status", "active")
+        .lte("deadline", futureDate)
+        .order("deadline", { ascending: true });
+
+      if (subject) query = query.ilike("subject", `%${subject}%`);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ count: data?.length || 0, tasks: data || [] }, null, 2),
+          },
+        ],
+      };
+    }
+
+    case "get_weekly_schedule": {
+      const day = args?.day ?? -1;
+      let query = supabase
+        .from("schedules")
+        .select("*, subjects(*)")
+        .eq("is_active", true)
+        .order("day_of_week", { ascending: true })
+        .order("start_time", { ascending: true });
+
+      if (day >= 0) query = query.eq("day_of_week", day);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                day_filter: day >= 0 ? ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"][day] : "الكل",
+                sessions_count: data?.length || 0,
+                schedule: data || [],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    case "get_important_dates": {
+      const type = args?.type || "all";
+      const daysAhead = args?.days_ahead || 30;
+      const futureDate = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString();
+      const now = new Date().toISOString();
+
+      let query = supabase
+        .from("important_dates")
+        .select("*, subjects(*)")
+        .gte("date", now)
+        .lte("date", futureDate)
+        .order("date", { ascending: true });
+
+      if (type !== "all") query = query.eq("type", type);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              { type_filter: type, dates_count: data?.length || 0, dates: data || [] },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    case "add_important_date": {
+      const { title, description, date, type, is_pinned } = args || {};
+      if (!title?.trim() || !date) throw new Error("title و date مطلوبة");
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) throw new Error("صيغة date غير صالحة");
+      const { data, error } = await supabase
+        .from("important_dates")
+        .insert([
+          {
+            title: title.trim(),
+            description: description?.trim() || "",
+            date: dateObj.toISOString(),
+            type: type || "event",
+            is_pinned: Boolean(is_pinned),
+          },
+        ])
+        .select();
+      if (error) throw error;
+      return {
+        content: [{ type: "text", text: `📅 تم إضافة الموعد!\n\n${JSON.stringify(data?.[0] || {}, null, 2)}` }],
+      };
+    }
+
+    case "get_subjects": {
+      const { data, error } = await supabase
+        .from("subjects")
+        .select("*")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ subjects_count: data?.length || 0, subjects: data || [] }, null, 2),
+          },
+        ],
+      };
+    }
+
+    case "get_attendance_stats": {
+      const subject = args?.subject;
+      let query = supabase.from("attendance").select("*, subjects(*)");
+      if (subject) {
+        // فلترة حسب اسم المادة
+        const { data: subj } = await supabase
+          .from("subjects")
+          .select("id")
+          .ilike("name", `%${subject}%`)
+          .single();
+        if (subj) query = query.eq("subject_id", subj.id);
+      }
+      const { data, error } = await query.order("session_date", { ascending: false });
+      if (error) throw error;
+
+      // حساب الإحصائيات
+      const totalSessions = data?.length || 0;
+      const totalPresent = data?.reduce((sum: number, r: any) => sum + (r.present_count || 0), 0) || 0;
+      const totalAbsent = data?.reduce((sum: number, r: any) => sum + (r.absent_count || 0), 0) || 0;
+      const avgAttendance = totalSessions > 0 ? Math.round((totalPresent / (totalPresent + totalAbsent)) * 100) : 0;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                total_sessions: totalSessions,
+                total_present: totalPresent,
+                total_absent: totalAbsent,
+                average_attendance_rate: `${avgAttendance}%`,
+                recent_sessions: data?.slice(0, 10) || [],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    case "get_submissions": {
+      const { task_id, status } = args || {};
+      if (!task_id) throw new Error("task_id مطلوب");
+      let query = supabase.from("submissions").select("*").eq("task_id", task_id);
+      if (status && status !== "all") query = query.eq("status", status);
+      const { data, error } = await query.order("submitted_at", { ascending: false });
+      if (error) throw error;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ count: data?.length || 0, submissions: data || [] }, null, 2),
+          },
+        ],
+      };
+    }
+
+    case "review_submission": {
+      const { submission_id, status, grade, feedback } = args || {};
+      if (!submission_id) throw new Error("submission_id مطلوب");
+      const updateData: any = {
+        status: status || "reviewed",
+        reviewed_at: new Date().toISOString(),
+      };
+      if (grade) updateData.grade = grade;
+      if (feedback) updateData.feedback = feedback;
+      const { data, error } = await supabase
+        .from("submissions")
+        .update(updateData)
+        .eq("id", submission_id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error(`لم يتم العثور على تسليم: ${submission_id}`);
+      return {
+        content: [{ type: "text", text: `✅ تم مراجعة التسليم.\n\n${JSON.stringify(data[0], null, 2)}` }],
       };
     }
 

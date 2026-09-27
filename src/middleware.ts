@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // ==========================================
-// Middleware - حماية صفحات /admin و APIs
+// Middleware - حماية صفحات الأدمن و APIs
+// المسار المخفي: /go/admin
 // ==========================================
 
 const SUPABASE_URL =
@@ -11,12 +12,13 @@ const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 // المسارات المحمية
-const PROTECTED_PATHS = ["/admin"];
+const PROTECTED_PATHS = ["/admin", "/go/admin"];
 const PROTECTED_API_PATHS = ["/api/admin"];
 
 // استثناءات (لا تتطلب تسجيل دخول)
 const PUBLIC_PATHS = [
   "/admin/login",
+  "/go/admin/login",
   "/api/admin/login",
   "/api/admin/health",
 ];
@@ -24,7 +26,7 @@ const PUBLIC_PATHS = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. تحقق من صفحات /admin (UI)
+  // 1. تحقق من صفحات /admin و /go/admin
   const isProtectedPage = PROTECTED_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/")
   );
@@ -51,7 +53,7 @@ export async function middleware(request: NextRequest) {
       } = await supabase.auth.getSession();
 
       if (!session) {
-        const loginUrl = new URL("/admin/login", request.url);
+        const loginUrl = new URL("/go/admin/login", request.url);
         loginUrl.searchParams.set("redirect", pathname);
         return NextResponse.redirect(loginUrl);
       }
@@ -60,7 +62,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 2. تحقق من مسارات /api/admin (Server-to-Server)
+  // 2. تحقق من مسارات /api/admin
   const isProtectedApi = PROTECTED_API_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/")
   );
@@ -105,5 +107,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/admin/:path*", "/go/admin/:path*", "/api/admin/:path*"],
 };

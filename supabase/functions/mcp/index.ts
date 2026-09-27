@@ -310,7 +310,10 @@ function jsonResponse(body: any, status = 200, extraHeaders: Record<string, stri
 
 function getBaseUrl(req: Request): string {
   const url = new URL(req.url);
-  return `${url.protocol}//${url.host}`;
+  // Supabase Edge Functions بترجع http:// بدل https:// لأنها وراء proxy
+  // نستخدم x-forwarded-proto header علشان نرجع الـ protocol الصحيح
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  return `${proto}://${url.host}`;
 }
 
 // ==========================================
@@ -428,17 +431,27 @@ async function handleRequest(req: Request, supabase: any) {
   const url = new URL(req.url);
   const path = url.pathname;
   const base = getBaseUrl(req);
+  // mcpUrl لازم يكون المسار الكامل اللي بيشوفه العميل من بره
   const mcpUrl = `${base}/functions/v1/mcp`;
 
   // === OAuth endpoints ===
-  // ملاحظة: ChatGPT بيجيب الـ endpoints دي من WWW-Authenticate header
-  // فلازم تكون على نفس الـ MCP URL path
+  // ملاحظة: Supabase Edge Functions بيشيل /functions/v1/mcp من الـ path
+  // فداخل الـ function، الـ path هيكون:
+  // - / (root للـ MCP endpoint)
+  // - /oauth/authorize
+  // - /oauth/token
+  // - /oauth/register
+  // - /.well-known/oauth-protected-resource
+  // - /.well-known/oauth-authorization-server
+  //
+  // لكن العميل بيشوف URLs كاملة (https://...supabase.co/functions/v1/mcp/oauth/authorize)
+  // فبنستخدم endsWith() علشان نطابق أي path
 
   // .well-known/oauth-protected-resource (RFC 9728)
   if (path.endsWith("/.well-known/oauth-protected-resource")) {
     return jsonResponse({
       resource: mcpUrl,
-      authorization_servers: [mcpUrl], // نفس MCP URL عشان ChatGPT يجيب AS metadata من نفس الـ path
+      authorization_servers: [mcpUrl],
       bearer_methods_supported: ["header"],
       scopes_supported: [],
     });
@@ -677,9 +690,14 @@ async function handleRequest(req: Request, supabase: any) {
   }
 
   // === MCP endpoints ===
+  // Supabase Edge Function path هيكون / أو /mcp (حسب الإصدار)
+  // نطابق على / أو /mcp أو /functions/v1/mcp
+
+  const isMcpRoot = path === "/" || path === "/mcp" || path === "/functions/v1/mcp" ||
+                     path.endsWith("/functions/v1/mcp") || path.endsWith("/mcp");
 
   // GET: 405 Method Not Allowed (Streamable HTTP)
-  if (req.method === "GET" && (path === "/functions/v1/mcp" || path.endsWith("/functions/v1/mcp"))) {
+  if (req.method === "GET" && isMcpRoot) {
     return new Response("Method Not Allowed", {
       status: 405,
       headers: { ...corsHeaders, Allow: "POST" },
@@ -687,12 +705,12 @@ async function handleRequest(req: Request, supabase: any) {
   }
 
   // DELETE: end session
-  if (req.method === "DELETE" && (path === "/functions/v1/mcp" || path.endsWith("/functions/v1/mcp"))) {
+  if (req.method === "DELETE" && isMcpRoot) {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   // POST: MCP JSON-RPC
-  if (req.method === "POST" && (path === "/functions/v1/mcp" || path.endsWith("/functions/v1/mcp"))) {
+  if (req.method === "POST" && isMcpRoot) {
     // المصادقة
     const authResult = await verifyAuth(req, supabase);
     if (!authResult.authorized) {

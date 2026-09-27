@@ -516,61 +516,24 @@ async function handleRequest(req: Request, supabase: any) {
 
       if (!redirectUri) return new Response("redirect_uri مطلوب", { status: 400 });
 
-      const html = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>مصادقة منصة الدفعة لـ ChatGPT</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <style>body{font-family:'Cairo',sans-serif;background-color:#0b0f19;color:#f3f4f6;}.glass{background:rgba(17,24,39,0.7);backdrop-filter:blur(12px);}</style>
-</head>
-<body class="min-h-screen flex items-center justify-center p-4">
-  <div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
-  <div class="max-w-md w-full glass border border-gray-800 p-6 md:p-8 rounded-3xl space-y-6 shadow-2xl relative z-10">
-    <div class="text-center space-y-3">
-      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 text-2xl">🔑</div>
-      <h1 class="text-xl font-extrabold text-white">منح صلاحية ChatGPT للوصول للمنصة</h1>
-      <p class="text-xs text-gray-400">أدخل مفتاح الـ API المولّد من لوحة الأدمن لتأكيد الربط.</p>
-    </div>
-    ${errorParam ? `<div class="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-xl text-center">${errorParam}</div>` : ""}
-    <form method="POST" action="${mcpUrl}/oauth/authorize" class="space-y-4">
-      <input type="hidden" name="redirect_uri" value="${redirectUri.replace(/"/g, "&quot;")}" />
-      <input type="hidden" name="state" value="${state.replace(/"/g, "&quot;")}" />
-      <input type="hidden" name="client_id" value="${clientId.replace(/"/g, "&quot;")}" />
-      <input type="hidden" name="code_challenge" value="${codeChallenge.replace(/"/g, "&quot;")}" />
-      <input type="hidden" name="code_challenge_method" value="${codeChallengeMethod.replace(/"/g, "&quot;")}" />
-      <input type="hidden" name="resource" value="${resource.replace(/"/g, "&quot;")}" />
-      <input type="hidden" name="scope" value="${scope.replace(/"/g, "&quot;")}" />
-      <div class="space-y-2">
-        <label class="text-xs font-medium text-gray-300">مفتاح API (BMP Key)</label>
-        <input type="password" name="api_key" placeholder="bmp_key_..." required autocomplete="off" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 font-mono" />
-        <p class="text-[10px] text-gray-500">يبدأ بـ <code class="text-blue-400">bmp_key_</code></p>
-      </div>
-      <div class="bg-blue-950/30 border border-blue-500/20 p-3 rounded-xl text-[11px] text-blue-200/80">
-        <p><strong class="text-blue-300">الصلاحيات:</strong> قراءة الاستفسارات، اقتراح ردود، نشر إعلانات وتكليفات.</p>
-      </div>
-      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-blue-600/25 text-sm">تأكيد ومنح الصلاحية</button>
-    </form>
-  </div>
-</body>
-</html>`;
+      // بدلاً من عرض HTML مباشرة (لأن Supabase بتغير Content-Type لـ text/plain)
+      // نعيد redirect للواجهة الأمامية (Next.js على Cloudflare)
+      // اللي هتعرض صفحة OAuth بشكل صحيح
+      const frontendUrl = "https://student-moderat.mathatqra.workers.dev/oauth/authorize";
+      const redirectParams = new URLSearchParams();
+      redirectParams.set("redirect_uri", redirectUri);
+      if (state) redirectParams.set("state", state);
+      if (clientId) redirectParams.set("client_id", clientId);
+      if (codeChallenge) redirectParams.set("code_challenge", codeChallenge);
+      if (codeChallengeMethod) redirectParams.set("code_challenge_method", codeChallengeMethod);
+      if (resource) redirectParams.set("resource", resource);
+      if (scope) redirectParams.set("scope", scope);
+      if (errorParam) redirectParams.set("error", errorParam);
+      // مفتاح: نمرر mcpUrl عشان الـ form يبعت الـ POST للـ Edge Function
+      redirectParams.set("mcp_url", mcpUrl);
 
-      // إرجاع HTML مع Content-Type صحيح
-      // Supabase Edge Functions بتـ override Content-Type أحياناً
-      // فبنستخدم Blob مع type صريح + Headers API
-      const htmlBlob = new Blob([html], { type: "text/html; charset=utf-8" });
-
-      const responseHeaders = new Headers();
-      responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
-      responseHeaders.set("X-Content-Type-Options", "nosniff");
-      responseHeaders.set("Access-Control-Allow-Origin", "*");
-
-      return new Response(htmlBlob, {
-        status: 200,
-        headers: responseHeaders,
-      });
+      const finalUrl = `${frontendUrl}?${redirectParams.toString()}`;
+      return Response.redirect(finalUrl, 302);
     }
 
     if (req.method === "POST") {
@@ -586,20 +549,16 @@ async function handleRequest(req: Request, supabase: any) {
         const scope = formData.get("scope")?.toString().trim() || "";
 
         if (!apiKey || !redirectUri) {
-          return new Response("مطلوب: api_key + redirect_uri", { status: 400 });
+          return jsonResponse({ ok: false, error: "مطلوب: api_key + redirect_uri" }, 400);
         }
 
         const { valid, keyId, name } = await verifyApiKey(supabase, apiKey);
         if (!valid) {
-          const errUrl = new URL(`${mcpUrl}/oauth/authorize`);
-          errUrl.searchParams.set("redirect_uri", redirectUri);
-          errUrl.searchParams.set("state", state);
-          errUrl.searchParams.set("client_id", clientId);
-          if (codeChallenge) errUrl.searchParams.set("code_challenge", codeChallenge);
-          if (codeChallengeMethod) errUrl.searchParams.set("code_challenge_method", codeChallengeMethod);
-          if (resource) errUrl.searchParams.set("resource", resource);
-          errUrl.searchParams.set("error", "مفتاح API غير صحيح أو منتهي");
-          return Response.redirect(errUrl.toString(), 307);
+          // نرجع JSON بدلاً من redirect عشان الـ client يقدر يعالج الخطأ
+          return jsonResponse({
+            ok: false,
+            error: "مفتاح API غير صحيح أو منتهي",
+          }, 401);
         }
 
         const codePayload = {
@@ -623,7 +582,12 @@ async function handleRequest(req: Request, supabase: any) {
         callbackUrl.searchParams.set("code", b64);
         if (state) callbackUrl.searchParams.set("state", state);
 
-        return Response.redirect(callbackUrl.toString(), 307);
+        // نرجع JSON يحتوي على redirect_url بدلاً من HTTP redirect
+        // عشان الـ client (Next.js) يقدر يعمل redirect بنفسه
+        return jsonResponse({
+          ok: true,
+          redirect_url: callbackUrl.toString(),
+        });
       } catch (error: any) {
         return new Response(`OAuth authorize error: ${error.message}`, { status: 500 });
       }

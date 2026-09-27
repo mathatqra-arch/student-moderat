@@ -557,13 +557,14 @@ async function handleRequest(req: Request, supabase: any) {
 </body>
 </html>`;
 
-      // تحويل الـ HTML إلى UTF-8 bytes لمنع مشاكل الترميز في Supabase Edge Functions
-      const encoder = new TextEncoder();
-      const htmlBytes = encoder.encode(html);
-      return new Response(htmlBytes, {
+      // إرجاع HTML كـ string عادي (مش bytes) مع headers واضحة
+      // ملاحظة: لازم نستخدم Response مع headers صريحة لتفادي مشاكل الترميز
+      return new Response(html, {
+        status: 200,
         headers: {
           "Content-Type": "text/html; charset=utf-8",
-          "Content-Length": htmlBytes.byteLength.toString(),
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "X-Content-Type-Options": "nosniff",
         },
       });
     }

@@ -557,15 +557,17 @@ async function handleRequest(req: Request, supabase: any) {
 </body>
 </html>`;
 
-      // ملاحظة مهمة: Supabase Edge Functions بترفض أحياناً Content-Type اللي بنبعته
-      // فلازم نستخدم Headers API بشكل صريح لتفادي override
+      // إرجاع HTML مع Content-Type صحيح
+      // Supabase Edge Functions بتـ override Content-Type أحياناً
+      // فبنستخدم Blob مع type صريح + Headers API
+      const htmlBlob = new Blob([html], { type: "text/html; charset=utf-8" });
+
       const responseHeaders = new Headers();
-      responseHeaders.set("Content-Type", "text/html; charset=utf-8");
       responseHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
       responseHeaders.set("X-Content-Type-Options", "nosniff");
       responseHeaders.set("Access-Control-Allow-Origin", "*");
 
-      return new Response(html, {
+      return new Response(htmlBlob, {
         status: 200,
         headers: responseHeaders,
       });

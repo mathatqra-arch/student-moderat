@@ -436,12 +436,12 @@
   .bg-green * { color: var(--ink) !important; }
   .bg-teal { color: var(--ink) !important; }
   .bg-teal * { color: var(--ink) !important; }
-  .bg-coral { color: var(--cream-light) !important; }
-  .bg-coral * { color: var(--cream-light) !important; }
-  .bg-blue { color: var(--cream-light) !important; }
-  .bg-blue * { color: var(--cream-light) !important; }
-  .bg-purple-soft { color: var(--cream-light) !important; }
-  .bg-purple-soft * { color: var(--cream-light) !important; }
+  .bg-coral { color: #000 !important; }
+  .bg-coral * { color: #000 !important; }
+  .bg-blue { color: #000 !important; }
+  .bg-blue * { color: #000 !important; }
+  .bg-purple-soft { color: #000 !important; }
+  .bg-purple-soft * { color: #000 !important; }
 
   /* Theme toggle — hidden in brutalist (cream only) */
   .theme-toggle-hidden { display: none !important; }

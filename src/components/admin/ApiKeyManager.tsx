@@ -2,9 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Key, Plus, Copy, Check, Trash2, Shield, Sparkles, Code } from "lucide-react";
-import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
 
 interface ApiKeyItem {
   id: string;
@@ -43,10 +40,8 @@ export default function ApiKeyManager() {
   const handleGenerateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyName.trim()) return;
-
     setLoading(true);
     setNewlyGeneratedKey(null);
-
     try {
       const res = await fetch("/api/admin/keys", {
         method: "POST",
@@ -54,7 +49,6 @@ export default function ApiKeyManager() {
         body: JSON.stringify({ name: keyName }),
       });
       const data = await res.json();
-
       if (data.apiKey) {
         setNewlyGeneratedKey(data.apiKey);
         setKeyName("");
@@ -70,8 +64,7 @@ export default function ApiKeyManager() {
   };
 
   const handleRevokeKey = async (id: string) => {
-    if (!confirm("هل أنت تأكد من إغلاق وتجميد مفتاح API هذا؟ لن يتمكن شات جي بي تي من استخدامه بعد الآن.")) return;
-
+    if (!confirm("هل أنت متأكد من حذف هذا المفتاح؟ لن يعمل مع ChatGPT بعد الآن.")) return;
     try {
       await fetch("/api/admin/keys", {
         method: "DELETE",
@@ -91,129 +84,156 @@ export default function ApiKeyManager() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Newly Generated Key Alert Box */}
+    <div className="space-y-5">
+      {/* Newly Generated Key */}
       {newlyGeneratedKey && (
-        <div className="bg-emerald-950/80 border border-emerald-500/50 p-5 rounded-2xl space-y-3 animate-fade-in shadow-xl shadow-emerald-950/40">
-          <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+        <div className="brutal-card p-5 space-y-3 animate-pop" style={{ background: "var(--green)", borderColor: "var(--ink)" }}>
+          <div className="flex items-center gap-2 text-ink font-extrabold text-sm">
             <Sparkles className="w-5 h-5" />
-            <span>تم توليد مفتاح API الجديد لشات جي بي تي بنجاح! 🔑</span>
+            <span>تم توليد مفتاح API بنجاح! 🔑</span>
           </div>
-          <p className="text-xs text-emerald-200/80">
-            احفظ هذا المفتاح في مكان آمن الآن، فلن يتم إظهاره كاملاً مرة أخرى:
+          <p className="text-xs text-ink-soft">
+            احفظ هذا المفتاح في مكان آمن الآن — لن يُظهر مرة أخرى:
           </p>
-
           <div className="flex items-center gap-2">
             <input
               type="text"
               readOnly
               value={newlyGeneratedKey}
-              className="w-full bg-emerald-900/60 border border-emerald-500/40 text-emerald-100 font-mono text-xs p-3 rounded-xl focus:outline-none"
+              className="brutal-input flex-1 px-3 py-2.5 text-xs font-mono"
+              style={{ background: "var(--cream-white)" }}
             />
-            <Button
+            <button
               onClick={() => copyToClipboard(newlyGeneratedKey)}
-              variant="success"
-              size="sm"
-              className="whitespace-nowrap"
+              className="brutal-btn px-4 py-2.5 text-xs whitespace-nowrap flex items-center gap-1.5"
             >
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? "تم النسخ!" : "نسخ المفتاح"}</span>
-            </Button>
+              <span>{copied ? "تم النسخ!" : "نسخ"}</span>
+            </button>
           </div>
         </div>
       )}
 
       {/* Key Generator Form */}
-      <Card className="space-y-4">
-        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-800">
-          <div className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
-            <Key className="w-5 h-5" />
+      <div className="brutal-card p-5 space-y-4">
+        <div className="flex items-center gap-3 pb-3 border-b-2 border-ink">
+          <div className="w-10 h-10 rounded-lg border-2 border-ink bg-yellow flex items-center justify-center shadow-brutal-sm">
+            <Key className="w-5 h-5 text-ink" />
           </div>
           <div>
-            <h3 className="font-bold text-gray-100 text-base">توليد مفاتيح API آمنة لشات جي بي تي (ChatGPT Auth)</h3>
-            <p className="text-xs text-gray-400">أنشئ مفتاحاً خاصاً لربطه بـ ChatGPT Custom Action أو ChatGPT Desktop</p>
+            <h3 className="font-extrabold text-base text-ink">توليد مفتاح API جديد</h3>
+            <p className="text-xs text-gray mt-0.5">لربط ChatGPT أو Claude Desktop بالمنصة</p>
           </div>
         </div>
 
         <form onSubmit={handleGenerateKey} className="flex flex-col sm:flex-row gap-3 items-end">
           <div className="flex-1 w-full">
-            <Input
-              label="اسم المفتاح *"
-              placeholder="مثال: مفتاح حساب شات جي بي تي الخاص بليدر الدفعة"
+            <label className="text-xs font-bold text-ink mb-1.5 block">اسم المفتاح *</label>
+            <input
+              type="text"
+              placeholder="مثال: مفتاح ChatGPT الرئيسي"
               value={keyName}
               onChange={(e) => setKeyName(e.target.value)}
               required
+              className="brutal-input w-full px-3.5 py-2.5 text-sm"
             />
           </div>
-          <Button
+          <button
             type="submit"
-            isLoading={loading}
-            className="w-full sm:w-auto"
+            disabled={loading}
+            className="brutal-btn px-5 py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
-            <span>توليد مفتاح جديد</span>
-          </Button>
+            <span>توليد</span>
+          </button>
         </form>
-      </Card>
+      </div>
 
-      {/* Existing Keys Table */}
-      <Card className="space-y-4">
-        <h4 className="font-bold text-gray-200 text-sm flex items-center gap-2">
-          <Shield className="w-4 h-4 text-emerald-400" />
-          المفاتيح النشطة حالياً
-        </h4>
+      {/* Existing Keys */}
+      <div className="brutal-card p-5 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b-2 border-ink">
+          <h4 className="font-extrabold text-sm text-ink flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            المفاتيح النشطة ({keys.length})
+          </h4>
+        </div>
 
-        {keys.length === 0 ? (
-          <p className="text-xs text-gray-500 py-4 text-center">لا توجد مفاتيح API مخصصة حتى الآن.</p>
+        {fetching ? (
+          <div className="space-y-2">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="skeleton h-14" style={{ animationDelay: `${i * 0.1}s` }} />
+            ))}
+          </div>
+        ) : keys.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="w-12 h-12 rounded-full border-2 border-ink bg-cream-dark mx-auto flex items-center justify-center mb-2">
+              <Key className="w-6 h-6 text-gray" />
+            </div>
+            <p className="text-xs text-gray font-bold">لا توجد مفاتيح API بعد</p>
+          </div>
         ) : (
           <div className="space-y-2">
             {keys.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/80 border border-gray-800 gap-3"
+                className="flex items-center justify-between p-3.5 brutal-card-flat gap-3"
               >
-                <div className="space-y-0.5">
-                  <span className="font-bold text-gray-200 text-xs">{item.name}</span>
-                  <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                    <span className="font-mono text-blue-400 bg-blue-950/40 px-2 py-0.5 rounded border border-blue-900/50">
-                      {item.key_preview}
-                    </span>
-                    <span>تاريخ الإنشاء: {new Date(item.created_at).toLocaleDateString("ar-EG")}</span>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-lg border-2 border-ink bg-purple-soft flex items-center justify-center flex-shrink-0">
+                    <Key className="w-4 h-4 text-ink" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-ink truncate">{item.name}</p>
+                    <div className="flex items-center gap-2 text-2xs text-gray mt-0.5">
+                      <code className="font-mono bg-cream-dark px-1.5 py-0.5 rounded border border-ink text-ink-soft">
+                        {item.key_preview}
+                      </code>
+                      <span>•</span>
+                      <span>{new Date(item.created_at).toLocaleDateString("ar-EG")}</span>
+                      {item.last_used_at && (
+                        <>
+                          <span>•</span>
+                          <span>آخر استخدام: {new Date(item.last_used_at).toLocaleDateString("ar-EG")}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-
                 <button
                   onClick={() => handleRevokeKey(item.id)}
-                  title="إلغاء وتجميد المفتاح"
-                  className="p-2 rounded-lg bg-rose-950/40 hover:bg-rose-900 text-rose-300 transition border border-rose-900/50"
+                  title="حذف المفتاح"
+                  className="p-2 rounded-lg border-2 border-ink bg-coral hover:bg-coral-light transition flex-shrink-0"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 text-ink" />
                 </button>
               </div>
             ))}
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* Live Supabase Edge Function & OpenAPI Info Box */}
-      <Card className="space-y-3 bg-purple-950/10 border-purple-900/30">
-        <div className="flex items-center gap-2 text-purple-300 font-bold text-sm">
-          <Code className="w-4 h-4 text-purple-400" />
-          <span>رابط خدمة MCP المباشر لشات جي بي تي (Supabase Edge Function):</span>
+      {/* MCP URL Info */}
+      <div className="brutal-card p-5 space-y-3" style={{ background: "var(--purple-soft)" }}>
+        <div className="flex items-center gap-2 font-extrabold text-sm text-ink">
+          <Code className="w-4 h-4" />
+          <span>رابط MCP لـ ChatGPT</span>
         </div>
-        <p className="text-xs text-gray-300 leading-relaxed">
-          يمكنك نسخ الرابط المباشر التالي ووضعه في إعدادات ChatGPT Custom GPT أو ChatGPT Desktop:
+        <p className="text-xs text-ink-soft leading-relaxed">
+          انسخ هذا الرابط وأضفه في ChatGPT → Settings → Connectors:
         </p>
-        <div className="bg-gray-900 p-2.5 rounded-xl border border-gray-800 flex items-center justify-between text-xs font-mono text-purple-300">
-          <span className="truncate">https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp</span>
+        <div className="brutal-card-flat p-3 flex items-center justify-between gap-2 text-xs" style={{ background: "var(--cream-white)" }}>
+          <code className="font-mono text-ink-soft truncate text-2xs">
+            https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
+          </code>
           <button
             onClick={() => copyToClipboard("https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp")}
-            className="text-xs text-blue-400 hover:text-blue-300 underline font-sans whitespace-nowrap mr-2"
+            className="brutal-btn-ghost px-3 py-1.5 text-2xs whitespace-nowrap flex items-center gap-1"
           >
-            نسخ الرابط المباشر
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            <span>{copied ? "تم!" : "نسخ"}</span>
           </button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

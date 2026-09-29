@@ -318,36 +318,48 @@ function SessionCard({ session }: { session: any }) {
   const TypeIcon = typeInfo.icon;
 
   const loc = (session.location || session.room || "").toLowerCase();
-  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين");
+  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين") || session.lecture_type === "online";
   const LocIcon = isOnline ? Video : MapPin;
-  const locLabel = isOnline ? "أونلاين" : (session.room || "");
+  
+  // لو الجلسة أونلاين ولها رابط (في room أو location أو notes)
+  const onlineUrl = isOnline ? (session.location || session.room || session.notes || "") : "";
+  const hasOnlineLink = isOnline && (onlineUrl.startsWith("http") || onlineUrl.startsWith("https"));
+  
+  // لو فيه رابط، نخلي البطاقة clickable
+  const CardWrapper = hasOnlineLink ? "a" : "div";
+  const cardProps = hasOnlineLink ? {
+    href: onlineUrl,
+    target: "_blank",
+    rel: "noopener noreferrer",
+  } : {};
 
   return (
-    <div className="brutal-card p-3 flex items-center gap-3">
+    <CardWrapper {...(cardProps as any)} className={`brutal-card p-3 flex items-center gap-3 ${hasOnlineLink ? "cursor-pointer hover:translate-x-[-2px] hover:translate-y-[-2px]" : ""}`}>
       <div className="w-1.5 h-14 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
       <div className="text-center flex-shrink-0 min-w-[56px]">
-        <p className="text-xs font-mono font-bold">{session.start_time?.slice(0, 5)}</p>
+        <p className="text-xs font-mono font-bold text-ink">{session.start_time?.slice(0, 5)}</p>
         <p className="text-2xs text-gray font-bold">{session.end_time?.slice(0, 5)}</p>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-bold text-sm truncate">{subject?.name || "—"}</p>
+        <p className="font-bold text-sm truncate text-ink">{subject?.name || "—"}</p>
         <div className="flex items-center gap-2 text-2xs mt-0.5">
-          <span className={`brutal-badge ${typeInfo.bg} text-ink`}>
+          <span className={`brutal-badge ${typeInfo.bg}`}>
             <TypeIcon className="w-2.5 h-2.5" />
             {typeInfo.label}
           </span>
-          {session.group && session.group !== "all" && (
-            <span className="brutal-badge bg-cream-dark">مجموعة {session.group}</span>
-          )}
-          {locLabel && (
-            <span className={`flex items-center gap-0.5 font-bold ${isOnline ? "text-teal-dark" : "text-gray"}`}>
-              <LocIcon className="w-2.5 h-2.5" />
-              {locLabel}
+          <span className={`brutal-badge ${isOnline ? "bg-green" : "bg-yellow"}`}>
+            <LocIcon className="w-2.5 h-2.5" />
+            {isOnline ? "أونلاين" : (session.room || "كلية")}
+          </span>
+          {hasOnlineLink && (
+            <span className="brutal-badge bg-teal">
+              <ExternalLink className="w-2.5 h-2.5" />
+              انضم
             </span>
           )}
         </div>
       </div>
-    </div>
+    </CardWrapper>
   );
 }
 
@@ -358,21 +370,25 @@ function GridSessionCard({ session }: { session: any }) {
   const subject = session.subjects;
   const color = subject?.color || "#FFD54F";
   const loc = (session.location || session.room || "").toLowerCase();
-  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين");
+  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين") || session.lecture_type === "online";
+  const onlineUrl = isOnline ? (session.location || session.room || session.notes || "") : "";
+  const hasOnlineLink = isOnline && (onlineUrl.startsWith("http") || onlineUrl.startsWith("https"));
+  const CardWrapper = hasOnlineLink ? "a" : "div";
+  const cardProps = hasOnlineLink ? { href: onlineUrl, target: "_blank", rel: "noopener noreferrer" } : {};
 
   return (
-    <div className="p-2 brutal-card-flat rounded-md text-2xs space-y-1" style={{ borderLeft: `4px solid ${color}` }}>
-      <p className="font-bold truncate">{subject?.name || "—"}</p>
-      <p className="font-mono text-gray">{session.start_time?.slice(0, 5)}</p>
+    <CardWrapper {...(cardProps as any)} className={`p-2 brutal-card-flat rounded-md text-2xs space-y-1 ${hasOnlineLink ? "cursor-pointer hover:shadow-brutal-sm" : ""}`} style={{ borderLeft: `4px solid ${color}` }}>
+      <p className="font-bold truncate text-ink">{subject?.name || "—"}</p>
+      <p className="font-mono text-gray font-bold">{session.start_time?.slice(0, 5)}</p>
       <div className="flex items-center gap-1 flex-wrap">
         <span className="brutal-badge bg-cream-dark">
           {session.type === "lecture" ? "محاضرة" : session.type === "lab" ? "معمل" : session.type === "tutorial" ? "سكشن" : session.type}
         </span>
-        {isOnline && <Video className="w-3 h-3 text-teal-dark" />}
-        {session.group && session.group !== "all" && <span className="brutal-badge bg-cream-dark">مجموعة {session.group}</span>}
+        {isOnline && <span className="brutal-badge bg-green"><Video className="w-2.5 h-2.5" />أونلاين</span>}
+        {hasOnlineLink && <span className="brutal-badge bg-teal"><ExternalLink className="w-2.5 h-2.5" />انضم</span>}
       </div>
-      {session.room && !isOnline && <p className="text-gray">{session.room}</p>}
-    </div>
+      {!isOnline && session.room && <p className="text-gray font-bold">{session.room}</p>}
+    </CardWrapper>
   );
 }
 

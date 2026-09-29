@@ -81,7 +81,7 @@ export default function ScheduleManager() {
       room: newRoom || null,
       type: newType,
       lecture_type: newMode,
-      location: newMode === "online" ? "أونلاين" : (newRoom || "الكلية"),
+      location: newMode === "online" ? (newRoom.startsWith("http") ? newRoom : "أونلاين") : (newRoom || "الكلية"),
       is_active: true,
     }]);
     setNewRoom("");
@@ -234,9 +234,9 @@ export default function ScheduleManager() {
                     type="text"
                     value={newRoom}
                     onChange={(e) => setNewRoom(e.target.value)}
-                    placeholder={newMode === "online" ? "رابط الاجتماع (اختياري)" : "قاعة 101"}
+                    placeholder={newMode === "online" ? "رابط المحاضرة (https://...)" : "قاعة 101"}
                     className="brutal-input w-full px-3 py-2.5 text-sm"
-                    disabled={newMode === "online"}
+                    disabled={false}
                   />
                 </div>
               </div>

@@ -192,7 +192,7 @@
 
   /* Button — ghost */
   .brutal-btn-ghost {
-    background: transparent;
+    background: rgb(45 45 45);
     color: var(--ink);
     font-weight: 700;
     border: var(--border-thick) solid var(--ink);

@@ -1,79 +1,58 @@
-# 🤖 دليل ربط خادم MCP مع ChatGPT و Supabase Edge Function
+# 🤖 دليل إعداد خادم MCP — Edge Function (الرسمي)
 
-> **الإصدار:** 2.0.0 — يدعم MCP protocol `2025-03-26` + Streamable HTTP + OAuth2 + API Key
+> ⚠️ **مهم:** خادم MCP عبر Next.js (`/api/mcp`) **قُدِّم للتقادم** (يرجع 410).
+> الخادم الرسمي الوحيد الآن: **Supabase Edge Function**
 
----
-
-## 🎯 ثلاث طرق لتشغيل خادم MCP
-
-| الطريقة | URL / Command | الاستخدام |
-|---------|--------------|-----------|
-| **1. Next.js API Route** | `http://localhost:3000/api/mcp` | تطوير محلي + نشر على Cloudflare |
-| **2. Supabase Edge Function** | `https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp` | الإنتاج — أسرع وأرخص |
-| **3. Local stdio** | `npm run mcp:start` | Claude Desktop / VS Code MCP integration |
-
----
-
-## 📌 1. تكوين MCP لـ ChatGPT Custom GPT (HTTP)
-
-في ChatGPT → Explore GPTs → Create → Configure → Add Action:
-
-### Schema URL:
+**رابط الخادم:**
 ```
-https://student-moderat.mathatqra.workers.dev/api/mcp/openapi.json
+https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 ```
 
-### Authentication:
-- اختر **Bearer Token**
-- أدخل مفتاح `bmp_key_...` المولّد من لوحة الأدمن
-
-أو استخدم **OAuth 2.0** (الإعداد الموصى به):
-- Authorization URL: `https://student-moderat.mathatqra.workers.dev/api/mcp/oauth/authorize`
-- Token URL: `https://student-moderat.mathatqra.workers.dev/api/mcp/oauth/token`
+**الإصدار:** v3.1.0 — بروتوكول `2025-06-18` | ~55 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل
 
 ---
 
-## 📌 2. تكوين MCP JSON لـ Claude Desktop / VS Code
+## 🔑 المصادقة — طريقتان
 
-### الطريقة A — عبر HTTP (Next.js route):
+### 1. مفتاح API (موصى به)
+أنشئ مفتاحاً من **لوحة الأدمن → tab مفاتيح API** — أو حتى عبر MCP نفسه بأداة `create_api_key`.
+المفاتيح قابلة للإبطال وتُسجَّل كل استخداماتها (IP + وقت).
 
+### 2. التوكن السري (للاختبار فقط)
+`MCP_SECRET_TOKEN` — يُضبط عبر: `supabase secrets set MCP_SECRET_TOKEN=...`
+
+---
+
+## ⚙️ الربط مع ChatGPT (Custom Connector)
+
+1. **Settings → Connectors → Create** → اختر **MCP**
+2. **Server URL:** `https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp`
+3. **Authentication:** `OAuth` — سيكتشف ChatGPT تلقائياً:
+   - `/.well-known/oauth-protected-resource` (RFC 9728)
+   - `/.well-known/oauth-authorization-server` (RFC 8414)
+   - تسجيل ديناميكي + صفحة موافقة على `/oauth/authorize`
+4. الصق مفتاح API عند طلب الموافقة، وسيُصدر access token صالح 30 يوماً
+
+أو مباشرة بـ Bearer:
 ```json
 {
   "mcpServers": {
     "batch-management": {
-      "url": "http://localhost:3000/api/mcp",
-      "headers": {
-        "Authorization": "Bearer bmp_key_YOUR_KEY_HERE"
-      }
+      "url": "https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp",
+      "headers": { "Authorization": "Bearer bmp_key_..." }
     }
   }
 }
 ```
 
-### الطريقة B — عبر Supabase Edge Function:
+## ⚙️ الربط مع Claude Desktop / VS Code
 
 ```json
 {
   "mcpServers": {
     "batch-management": {
       "url": "https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp",
-      "headers": {
-        "Authorization": "Bearer bmp_key_YOUR_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-### الطريقة C — عبر stdio (local):
-
-```json
-{
-  "mcpServers": {
-    "batch-management": {
-      "command": "npx",
-      "args": ["tsx", "mcp/server.ts"],
-      "cwd": "/absolute/path/to/student-moderat"
+      "headers": { "Authorization": "Bearer bmp_key_..." }
     }
   }
 }
@@ -81,176 +60,57 @@ https://student-moderat.mathatqra.workers.dev/api/mcp/openapi.json
 
 ---
 
-## 🛠️ الأدوات المتاحة (7 tools)
+## 🛠️ الأدوات المتاحة (~55)
 
-| الأداة | الوصف | المعطيات المطلوبة |
-|------|------|---------|
-| `get_pending_inquiries` | استرجاع استفسارات الطلاب | `status` (اختياري: new/in_progress/resolved/archived/all), `limit` |
-| `suggest_inquiry_reply` | حفظ رد مقترح وتحديث الحالة | `inquiry_id`, `reply_text`, `new_status` |
-| `create_announcement` | نشر إعلان جديد | `title`, `content`, `category`, `is_pinned` |
-| `create_academic_task` | إضافة تكليف دراسي | `subject`, `title`, `deadline` (ISO 8601), `description` |
-| `get_batch_context` | سياق شامل (إعلانات + مهام + روابط) | لا شيء |
-| `get_inquiry_stats` | إحصائيات الاستفسارات | لا شيء |
-| `resolve_inquiry` | إغلاق استفسار كمحلول | `inquiry_id`, `resolution_note` |
+### لوحة التحكم
+| أداة | الوظيفة |
+|---|---|
+| `get_dashboard_stats` | إحصائيات شاملة لكل الجداول |
+| `search_platform` | بحث شامل في كل المحتوى |
+| `get_batch_context` | سياق شامل قبل توليد الردود (إعلانات + مهام + روابط + مواعيد) |
 
----
+### الإعلانات والتكليفات
+`list_announcements` · `get_announcement` · `create_announcement` · `update_announcement` · `delete_announcement` · `list_tasks` · `get_task` · `create_task` · `create_academic_task` · `update_task` · `delete_task`
 
-## 🔐 المصادقة
+### المواد والجدول
+`list_subjects` · `create_subject` · `update_subject` · `delete_subject` · `list_schedule` (بفلتر المجموعة أ/ب/ج/د ونوع الحضور) · `create_schedule_session` · `update_schedule_session` · `delete_schedule_session`
 
-يدعم خادم MCP ثلاث طرق للمصادقة:
+### المواعيد والروابط
+`list_important_dates` · `create_important_date` · `update_important_date` · `delete_important_date` · `list_quick_links` · `create_quick_link` (**روابط المحاضرات** — يتطلب http/https صالح) · `update_quick_link` · `delete_quick_link`
 
-### 1. Bearer Token (موصى به)
-```http
-Authorization: Bearer bmp_key_xxxxxxxxxxxxxxxx
-```
+### الاستفسارات
+`list_inquiries` · `get_pending_inquiries` · `get_inquiry` · `update_inquiry` · `suggest_inquiry_reply` · `resolve_inquiry` · `delete_inquiry` · `get_inquiry_stats`
 
-### 2. API Key Header
-```http
-x-api-key: bmp_key_xxxxxxxxxxxxxxxx
-```
+### التسليمات والحضور
+`list_submissions` · `update_submission` (درجة + ملاحظات + حالة) · `delete_submission` · `list_attendance` · `upsert_attendance` · `delete_attendance`
 
-### 3. OAuth 2.0 (Authorization Code flow)
-- Authorize: `/api/mcp/oauth/authorize`
-- Token: `/api/mcp/oauth/token`
-- يدعم redirect URIs من ChatGPT و Claude Desktop
-
-### توليد مفتاح API
-1. ادخل لوحة الأدمن: `/admin` → تبويب "مفاتيح API & ChatGPT"
-2. أدخل اسماً للمفتاح واضغط "توليد مفتاح جديد"
-3. احفظ المفتاح في مكان آمن — لا يُعرض مرة أخرى
+### الإعدادات والفريق والمفاتيح
+`list_settings` · `set_setting` · `delete_setting` · `list_notification_logs` · `create_notification_log` · `delete_notification_log` · `list_team_members` · `create_team_member` · `update_team_member` · `delete_team_member` · **`list_api_keys` · `create_api_key` · `revoke_api_key` · `delete_api_key`** · `list_push_subscriptions` · `delete_push_subscription`
 
 ---
 
-## 🧪 اختبار خادم MCP
+## 🔒 ما الجديد في v3.1
 
-### اختبار HTTP route (Next.js):
-```bash
-# بعد تشغيل npm run dev
-npm run mcp:test
-```
-
-### اختبار stdio server (local):
-```bash
-npm run mcp:test:stdio
-```
-
-### اختبار Supabase Edge Function:
-```bash
-# بعد نشر Edge Function
-npm run mcp:test:edge --token=$MCP_SECRET_TOKEN
-```
-
-### اختبار يدوي بـ curl:
-```bash
-# Discovery
-curl http://localhost:3000/api/mcp \
-  -H "Authorization: Bearer bmp_key_..."
-
-# Initialize
-curl -X POST http://localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer bmp_key_..." \
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}'
-
-# List tools
-curl -X POST http://localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer bmp_key_..." \
-  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":2}'
-
-# Create announcement
-curl -X POST http://localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer bmp_key_..." \
-  -d '{
-    "jsonrpc":"2.0",
-    "method":"tools/call",
-    "params":{
-      "name":"create_announcement",
-      "arguments":{
-        "title":"إعلان تجريبي",
-        "content":"تم النشر عبر MCP!",
-        "category":"هام"
-      }
-    },
-    "id":3
-  }'
-```
+- ✅ إصلاح خطأ syntax كان يمنع نشر الـ Edge Function
+- ✅ إضافة أدوات إدارة **مفاتيح API** كاملة (create/revoke/delete/list)
+- ✅ إضافة `get_batch_context` و `suggest_inquiry_reply` و `resolve_inquiry` و `get_pending_inquiries` (توافق مع ChatGPT)
+- ✅ دعم **مجموعات الجدول** (أ/ب/ج/د) و**نوع الحضور** (university/online/hybrid)
+- ✅ **Rate Limiting** لكل مفتاح: 120 طلب/دقيقة (ذرّي في قاعدة البيانات، fail-open)
+- ✅ **سجل تدقيق** لكل استدعاء أداة: من/ماذا/متى/نتيجة/مدة/IP → جدول `mcp_audit_log`
+- ✅ تحقق من المدخلات: حد أقصى للنصوص + تحقق من صحة الروابط + حدود استعلامات
+- ✅ أمان OAuth: كود صالح 10 دقائق، access token صالح 30 يوماً (كان 10 سنوات!)
+- ✅ حقل `OAUTH_AUTHORIZE_URL` قابل للضبط في الـ secrets
 
 ---
 
-## 🚀 نشر Supabase Edge Function
+## 🧪 الاختبار
 
 ```bash
-# 1. ثبّت Supabase CLI (إن لم يكن مثبّتاً)
-npm install -g supabase
+npm run mcp:test:edge -- --token=$MCP_SECRET_TOKEN
+```
 
-# 2. سجّل الدخول
-supabase login
+## 🚀 النشر
 
-# 3. شغّل سكربت النشر التلقائي
+```bash
 ./scripts/deploy-edge.sh
 ```
-
-السكربت سـ:
-- ينشر `supabase/functions/mcp/index.ts` كـ Edge Function
-- يولّد `MCP_SECRET_TOKEN` عشوائياً ويضبطه كـ secret
-- يطبع لك الـ URL والتوكن للاختبار
-
----
-
-## 🔍 استكشاف الأخطاء
-
-### المشكلة: `401 Unauthorized`
-- تأكد أن المفتاح يبدأ بـ `bmp_key_` وأنه لم يُلغَ من لوحة الأدمن
-- لو تستخدم `MCP_SECRET_TOKEN`، تأكد أنه مضبوط في `.env.local`
-
-### المشكلة: Edge Function ترفض service_role key
-- النسخة المنشورة قديمة. أعد نشرها عبر: `./scripts/deploy-edge.sh`
-
-### المشكلة: `Cannot connect to localhost:3000`
-- تأكد أن `npm run dev` يعمل في نافذة أخرى
-
-### المشكلة: Claude Desktop لا يرى الأدوات
-- في إعدادات Claude → Developer → Edit Config → أضف الإعداد
-- أعد تشغيل Claude Desktop
-
----
-
-## 📊 Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ChatGPT / Claude / VS Code                │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ JSON-RPC 2.0 / HTTP / stdio
-                          ▼
-        ┌─────────────────┴─────────────────┐
-        │                                    │
-        ▼                                    ▼
-┌──────────────────────┐        ┌──────────────────────────┐
-│  Next.js API Route    │        │  Supabase Edge Function  │
-│  /api/mcp             │        │  /functions/v1/mcp        │
-│  (Streamable HTTP)   │        │  (HTTP + SSE)            │
-└──────────┬───────────┘        └──────────┬───────────────┘
-           │                                 │
-           └──────────┬──────────────────────┘
-                      ▼
-           ┌──────────────────────┐
-           │   Supabase Database  │
-           │  - inquiries         │
-           │  - announcements     │
-           │  - tasks             │
-           │  - api_keys          │
-           │  - quick_links       │
-           │  - team_members      │
-           └──────────────────────┘
-```
-
----
-
-## 📚 المراجع
-
-- [MCP Specification](https://spec.modelcontextprotocol.io/)
-- [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
-- [Next.js App Router](https://nextjs.org/docs/app)

@@ -1,21 +1,24 @@
 # 🎓 منصة إدارة الدفعة (Batch Management Platform)
 
 > منصة طلابية ذكية تعتمد على **Next.js 16 + Supabase + خادم MCP** لربط ChatGPT مباشرة.
+> **v2.1.0 — إصدار الإنتاج:** أمان محصّن، Rate Limiting، دعم 1000+ مستخدم متزامن.
 
 [![Status](https://img.shields.io/badge/status-production--ready-brightgreen)]()
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)]()
-[![MCP](https://img.shields.io/badge/MCP-2025--03--26-purple)]()
+[![Version](https://img.shields.io/badge/version-2.1.0-blue)]()
+[![MCP](https://img.shields.io/badge/MCP-2025--06--18-purple)]()
 
 ---
 
 ## ✨ المميزات
 
 - 📱 **واجهة طلاب PWA** بدون تسجيل دخول — إعلانات، تكليفات، استفسارات، روابط سريعة
-- 🛡️ **لوحة أدمن محمية** بـ Supabase Auth مع middleware
-- 🤖 **خادم MCP v2.0.0** — 7 أدوات ذكاء اصطناعي عبر HTTP/SSE/stdio
-- 🔐 **3 طرق مصادقة**: Bearer Token، x-api-key، OAuth 2.0 Authorization Code
-- 📊 **Supabase Database** مع RLS + RPC functions + 7 جداول
-- ☁️ **Cloudflare Pages** deployment جاهز
+- 🛡️ **لوحة أدمن محمية** بـ Supabase Auth + Middleware (fail-closed) + Rate Limiting
+- 🤖 **خادم MCP v3.1** — ~55 أداة تغطي كل وظائف الأدمن عبر Supabase Edge Function
+- 🔐 **مصادقة مرنة**: Bearer Token، x-api-key، OAuth 2.0 (كود صالح 10 دقائق، توكن 30 يوماً)
+- 📊 **Supabase Database** مع RLS مقوّى (فحص دور فعلي) + RPC + فهارس أداء
+- 🚦 **Rate Limiting ذري** في قاعدة البيانات — يحمي كل النقاط حتى مع 1000+ مستخدم
+- 🧾 **سجل تدقيق MCP** — كل استدعاء أداة يُسجَّل (من/ماذا/متى/IP/النتيجة)
+- ☁️ **Cloudflare Workers** deployment جاهز (دليل موحّد: `DEPLOYMENT.md`)
 
 ---
 
@@ -26,15 +29,17 @@
 npm install
 
 # 2. تجهيز البيئة
-cp .env.example .env.local   # عدّل القيم إن لزم
+cp .env.example .env.local   # عدّل القيم
 
 # 3. تشغيل التطوير
 npm run dev
 # → http://localhost:3000
 
-# 4. (اختياري) تشغيل خادم MCP stdio لـ Claude Desktop
-npm run mcp:start
+# 4. فحص الأنواع قبل النشر
+npm run typecheck
 ```
+
+> ⚠️ **مطلوب قبل الإنتاج:** تشغيل `supabase/migrations/20260930_production_hardening.sql` في SQL Editor (راجع `DEPLOYMENT.md`).
 
 ---
 
@@ -42,169 +47,143 @@ npm run mcp:start
 
 | المسار | الوصف |
 |-------|------|
-| `/` | الصفحة الرئيسية |
+| `/` | تحويل تلقائي لواجهة الطلاب |
 | `/student` | واجهة الطلاب PWA |
-| `/admin/login` | تسجيل دخول الأدمن |
-| `/admin` | لوحة تحكم الأدمن (محمية) |
-| `/api/mcp` | خادم MCP عبر HTTP |
-| `/api/mcp/oauth/authorize` | نافذة OAuth لـ ChatGPT |
-| `/api/mcp/oauth/token` | تبديل OAuth code بـ access token |
-| `/api/mcp/openapi.json` | مخطط OpenAPI |
-| `/api/admin/keys` | إدارة مفاتيح API (محمي) |
-| `/api/health` | فحص صحة النظام |
+| `/go/admin/login` | تسجيل دخول الأدمن (مسار مخفي) |
+| `/go/admin` | لوحة تحكم الأدمن (محمية) |
+| `/oauth/authorize` | صفحة موافقة OAuth لربط ChatGPT |
+| `/api/health` | فحص صحة حقيقي (يفحص قاعدة البيانات) |
+| `/api/mcp` | ⚠️ متقادم (410) — الخادم الرسمي: Supabase Edge Function |
+| `/api/admin/*` | APIs الأدمن (محمية + Rate Limited) |
 
 ---
 
-## 🤖 خادم MCP — ثلاث طرق للربط
+## 🤖 خادم MCP — Supabase Edge Function (الرسمي)
 
-### 1️⃣ عبر HTTP (Next.js API Route)
 ```json
 {
   "mcpServers": {
     "batch-management": {
-      "url": "http://localhost:3000/api/mcp",
+      "url": "https://<project-ref>.supabase.co/functions/v1/mcp",
       "headers": { "Authorization": "Bearer bmp_key_..." }
     }
   }
 }
 ```
 
-### 2️⃣ عبر Supabase Edge Function (الإنتاج)
-```json
-{
-  "mcpServers": {
-    "batch-management": {
-      "url": "https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp",
-      "headers": { "Authorization": "Bearer bmp_key_..." }
-    }
-  }
-}
-```
+- **~55 أداة**: إعلانات، تكليفات، مواد، جدول (بمجموعاته)، مواعيد، **روابط المحاضرات**، استفسارات، تسليمات، حضور، إعدادات، فريق، **مفاتيح API**
+- **Rate Limit**: 120 طلب/دقيقة لكل مفتاح (قابل للضبط)
+- **OAuth**: كود صالح 10 دقائق، access token صالح 30 يوماً
+- **Audit**: كل استدعاء يُسجَّل في `mcp_audit_log`
 
-### 3️⃣ عبر stdio (محلي مع Claude Desktop)
-```json
-{
-  "mcpServers": {
-    "batch-management": {
-      "command": "npx",
-      "args": ["tsx", "mcp/server.ts"]
-    }
-  }
-}
-```
-
-📖 **دليل التكوين الكامل:** `mcp_config_guide.md`
-
----
-
-## 🛠️ أدوات MCP المتاحة (7 tools)
-
-| الأداة | الوصف |
-|------|------|
-| `get_pending_inquiries` | استرجاع استفسارات الطلاب المعلقة |
-| `suggest_inquiry_reply` | حفظ رد مقترح وتحديث الحالة |
-| `create_announcement` | نشر إعلان جديد للطلاب |
-| `create_academic_task` | إضافة تكليف دراسي بموعد تسليم |
-| `get_batch_context` | سياق شامل (إعلانات + مهام + روابط) |
-| `get_inquiry_stats` 🆕 | إحصائيات الاستفسارات |
-| `resolve_inquiry` 🆕 | إغلاق استفسار كمحلول |
+📖 **الدليل الكامل + ربط ChatGPT:** `mcp_config_guide.md`
 
 ---
 
 ## 🧪 الاختبار
 
 ```bash
-# اختبار HTTP MCP server (11 اختبار)
-npm run mcp:test
+# فحص أنواع TypeScript
+npm run typecheck
 
-# اختبار stdio MCP server (5 اختبارات)
-npm run mcp:test:stdio
-
-# اختبار Supabase Edge Function
-npm run mcp:test:edge --token=$MCP_SECRET_TOKEN
+# اختبار Edge Function MCP
+npm run mcp:test:edge -- --token=$MCP_SECRET_TOKEN
 ```
 
 ---
 
 ## 📊 قاعدة البيانات
 
-شغّل migration SQL في Supabase SQL Editor بالترتيب:
+شغّل migrations في Supabase SQL Editor **بالترتيب**:
 
-1. `supabase/migrations/20260924_initial_schema.sql` — كل الجداول + RLS + RPC
+1. `supabase/migrations/20260924_initial_schema.sql` — الجداول الأساسية + RLS + RPC
 2. `supabase/migrations/20260924_api_keys_table.sql` — جدول مفاتيح API
-3. `supabase/migrations/20260925_api_keys_update.sql` 🆕 — تحديثات الأمان على api_keys
+3. `supabase/migrations/20260925_api_keys_update.sql` — تحديثات أمان المفاتيح
+4. `supabase/migrations/20260925_v3_schema.sql` — مواد وجدول ومواعيد وحضور
+5. `supabase/migrations/20260925_admin_otp_table.sql` — (اختياري)
+6. `supabase/migrations/20260925_admin_permissions.sql` — أذونات الفريق
+7. `supabase/migrations/20260928_schedule_groups.sql` — مجموعات الجدول
+8. **`supabase/migrations/20260930_production_hardening.sql` — إلزامي للإنتاج** (Rate Limits + RLS مقوّى + فهارس + Audit)
 
 ---
 
 ## ☁️ النشر
 
-### Supabase Edge Function
-```bash
-./scripts/deploy-edge.sh
-```
+الدليل الموحّد الكامل: **`DEPLOYMENT.md`**
 
-### Cloudflare Pages
-انظر `cloudflare_deployment_guide.md`
+```bash
+# نشر خادم MCP
+./scripts/deploy-edge.sh
+
+# تطبيق Next.js → Cloudflare Workers
+npx opennextjs-cloudflare build
+wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx opennextjs-cloudflare deploy
+```
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-ChatGPT / Claude / VS Code
-        │
-        ▼
-┌─────────────────────────────────────────┐
-│  MCP HTTP Server                        │
-│  ├─ /api/mcp            (Next.js)       │
-│  ├─ /functions/v1/mcp   (Supabase)      │
-│  └─ mcp/server.ts       (stdio)         │
-└─────────────┬───────────────────────────┘
-              ▼
-┌─────────────────────────────────────────┐
-│  Supabase Database                       │
-│  ├─ inquiries (RLS)                     │
-│  ├─ announcements (RLS)                 │
-│  ├─ tasks (RLS)                         │
-│  ├─ api_keys (revoked_at, last_used_ip) │
-│  ├─ quick_links, team_members, settings │
-│  └─ push_subscriptions                  │
-└─────────────────────────────────────────┘
+الطلاب (1000+ متزامن) ──► Cloudflare Worker (Next.js PWA) ──► Supabase REST + RLS
+الأدمن ────────────────► Cloudflare Worker (لوحة محمية) ────► Supabase Auth + DB
+ChatGPT / Claude ──────► Supabase Edge Function (MCP v3.1) ─► Supabase DB
+                                │
+                                ├─ Rate Limit (rate_limits — ذرّي)
+                                └─ Audit Log (mcp_audit_log)
 ```
+
+---
+
+## 🔒 الأمان — ما تم تحصينه في v2.1
+
+| الثغرة | الإصلاح |
+|---|---|
+| Service Role Key مكشوف في المستودع | إزالة كاملة + انتقال لـ `wrangler secret` + إلزامية التدوير |
+| Middleware يفشل مفتوحاً | أصبح fail-closed (أي خطأ مصادقة = رفض) |
+| بيانات أدمن افتراضية معروضة في صفحة الدخول | أُزيلت |
+| Brute Force على تسجيل الدخول | Rate Limit 10 محاولات/5 دقائق + رسائل موحدة (لا كشف للأرقام المسجلة) |
+| OTP يستبدل كلمة مرور الأدمن | مسار OTP أُزيل بالكامل (دخول بكلمة المرور فقط) |
+| Firebase SDK غير مستخدم | أُزيل من التبعيات (حزمة أخف وأسرع) |
+| RLS تسمح لأي مستخدم مسجل بالكتابة | فحص دور فعلي `is_team_admin()` |
+| مفاتيح API قابلة للقراءة من العميل | مقفلة على service role فقط |
+| سبام الاستفسارات (إدخال مجهول) | Trigger Rate Limit في قاعدة البيانات + قيود طول |
+| كشف أنواع TypeScript مخفي | `ignoreBuildErrors: false` |
+| OAuth توكن صالح 10 سنوات | أصبح 30 يوماً + كود صالح 10 دقائق |
 
 ---
 
 ## 📚 التوثيق
 
-- `PROJECT_EXECUTION_PLAN.md` — خطة التنفيذ الكاملة
-- `mcp_config_guide.md` — دليل تكوين MCP الشامل
-- `cloudflare_deployment_guide.md` — دليل النشر على Cloudflare
+- `DEPLOYMENT.md` — دليل النشر الموحّد + Checklist ما قبل الإطلاق
+- `mcp_config_guide.md` — دليل ربط ChatGPT/Claude + قائمة الأدوات
+- `PROJECT_EXECUTION_PLAN.md` — خطة التنفيذ
 
 ---
 
-## 🆕 ما الجديد في v2.0.0
+## 🆕 ما الجديد في v2.1.0
 
 ### 🔒 الأمان
-- ✅ إزالة backdoor في تسجيل دخول الأدمن
-- ✅ Middleware لحماية `/admin` و `/api/admin/*`
-- ✅ إزالة ثغرة "fallback no-token" في MCP server
-- ✅ تحقق من revoked API keys + تسجيل IP آخر استخدام
+- إزالة كل الأسرار من المستودع + `.gitignore` محصّن + إلزامية تدوير المفاتيح
+- إزالة مسار OTP بالكامل مع ثغرة استبدال كلمة المرور
+- إزالة Firebase (SDK غير مستخدم — حزمة أصغر)
+- تقوية RLS: `is_team_admin()` بدل "أي مستخدم مسجل"
+- قفل `api_keys` على service role فقط
 
-### 🛠️ MCP Server
-- ✅ ترقية لـ MCP protocol `2025-03-26`
-- ✅ Streamable HTTP transport + SSE + Session management
-- ✅ إضافة `get_inquiry_stats` و `resolve_inquiry` (7 أدوات الآن)
-- ✅ JSON-RPC batch requests support
+### 🚦 Rate Limiting
+- دالة ذرية `rate_limit_hit` في قاعدة البيانات (تعمل مع أي تزامن)
+- حماية تلقائية للاستفسارات/التسليمات/الاشتراكات عبر Triggers
+- حدود على الدخول وتغيير كلمة المرور وMCP
 
-### 🎨 OAuth
-- ✅ إصلاح bug الـ `className` في HTML
-- ✅ نافذة OAuth محسّنة بتصميم احترافي
-- ✅ base64url JSON payload للـ authorization code
+### 🤖 MCP v3.1
+- ~55 أداة (كانت 7 في HTTP القديم) تشمل إدارة المفاتيح وروابط المحاضرات
+- سجل تدقيق + Rate Limit لكل مفتاح + تحقق مدخلات
+- إصلاح syntax error كان يمنع نشر الـ Edge Function
 
-### 🧪 الاختبار والتوثيق
-- ✅ 11 اختبار HTTP + 5 اختبارات stdio
-- ✅ سكربت نشر تلقائي للـ Edge Function
-- ✅ توثيق شامل محدّث
+### ⚡ الأداء
+- فهارس لكل الاستعلامات الساخنة (واجهة الطلاب)
+- `/api/health` يفحص قاعدة البيانات فعلياً + `typecheck` script
 
 ---
 

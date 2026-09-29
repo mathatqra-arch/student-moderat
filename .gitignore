@@ -8,11 +8,17 @@
 /out/
 /.vercel/
 
+# opennext / cloudflare
+/.open-next/
+/.wrangler/
+
 # production
 /build
 
-# environment variables
-.env*.local
+# environment variables — كل ملفات البيئة السرية محظورة
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo

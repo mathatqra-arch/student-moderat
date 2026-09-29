@@ -155,9 +155,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return NextResponse.json(
-        { error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" },
+        { error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" },
         { status: 400 }
       );
     }
@@ -243,9 +243,9 @@ export async function PUT(request: Request) {
 
     // 1. تحديث كلمة المرور إن وُجدت
     if (password) {
-      if (password.length < 6) {
+      if (password.length < 8) {
         return NextResponse.json(
-          { error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" },
+          { error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" },
           { status: 400 }
         );
       }

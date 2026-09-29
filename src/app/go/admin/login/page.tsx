@@ -145,11 +145,10 @@ function AdminLoginForm() {
           </button>
         </form>
 
-        {/* Default credentials hint */}
+        {/* Security notice */}
         <div className="brutal-card-flat bg-yellow p-3 rounded-lg mt-4 text-xs space-y-1">
-          <p className="font-extrabold">🔑 للأدمن الأساسي:</p>
-          <p>الهاتف: <code className="font-mono font-bold">01040945655</code></p>
-          <p>كلمة المرور: <code className="font-mono font-bold">000000</code></p>
+          <p className="font-extrabold">🔐 صفحة محمية</p>
+          <p>هذه المنطقة مخصصة لمشرفي المنصة فقط. جميع محاولات الدخول تُسجَّل وتُراقب.</p>
         </div>
       </div>
     </div>

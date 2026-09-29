@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 // ==========================================
 // Admin Password Set/Change Endpoint
@@ -51,6 +52,10 @@ async function getAuthenticatedUser() {
 
 export async function POST(request: Request) {
   try {
+    // Rate Limit — 5 محاولات تغيير كل 10 دقائق لكل IP
+    const limited = await enforceRateLimit(request, RATE_LIMITS.passwordChange);
+    if (limited) return limited;
+
     const user = await getAuthenticatedUser();
     if (!user) {
       return NextResponse.json(
@@ -62,16 +67,23 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { new_password, current_password } = body;
 
-    if (!new_password || new_password.length < 6) {
+    if (!new_password || typeof new_password !== "string" || new_password.length < 8) {
       return NextResponse.json(
-        { error: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل" },
+        { error: "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل" },
         { status: 400 }
       );
     }
 
-    if (new_password === "000000") {
+    if (new_password.length > 72) {
       return NextResponse.json(
-        { error: "لا يمكنك استخدام 000000 ككلمة مرور دائمة" },
+        { error: "كلمة المرور طويلة جداً (الحد الأقصى 72 حرفاً)" },
+        { status: 400 }
+      );
+    }
+
+    if (/^0+$/.test(new_password) || /^(.)\1{3,}$/.test(new_password)) {
+      return NextResponse.json(
+        { error: "كلمة المرور ضعيفة جداً — لا يمكن استخدام أرقام/حروف متكررة" },
         { status: 400 }
       );
     }

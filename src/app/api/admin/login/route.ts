@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 // ==========================================
 // Admin Login Endpoint — Phone + Password
-// يستقبل phone + password وينشئ Supabase session
+// محصّن ضد: Brute Force (rate limit) + User Enumeration (رسائل موحدة)
 // ==========================================
 
 const SUPABASE_URL =
@@ -14,6 +15,9 @@ const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+// رسالة موحدة — لا نكشف هل الرقم موجود أم كلمة المرور خاطئة
+const GENERIC_LOGIN_ERROR = "بيانات الدخول غير صحيحة";
 
 function getAdminClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
@@ -45,6 +49,10 @@ interface LoginResponse {
 }
 
 export async function POST(request: Request): Promise<NextResponse<LoginResponse>> {
+  // 0. Rate Limit — 10 محاولات كل 5 دقائق لكل IP
+  const limited = await enforceRateLimit(request, RATE_LIMITS.login);
+  if (limited) return limited as NextResponse<LoginResponse>;
+
   try {
     const body = await request.json();
     const phoneInput: string = (body.phone || "").trim();
@@ -53,13 +61,6 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     if (!phoneInput || !password) {
       return NextResponse.json(
         { ok: false, error: "رقم الهاتف وكلمة المرور مطلوبان" },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 4) {
-      return NextResponse.json(
-        { ok: false, error: "كلمة المرور قصيرة جداً" },
         { status: 400 }
       );
     }
@@ -76,7 +77,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     if (listError) {
       console.error("Admin user search failed:", listError);
       return NextResponse.json(
-        { ok: false, error: "تعذّر البحث عن المستخدم" },
+        { ok: false, error: "تعذّر التحقق من بيانات الدخول" },
         { status: 500 }
       );
     }
@@ -92,17 +93,11 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       );
     });
 
-    if (!targetUser) {
+    // رسالة موحدة — لا نكشف وجود الحساب أم لا
+    if (!targetUser || !targetUser.email) {
       return NextResponse.json(
-        { ok: false, error: "لا يوجد حساب أدمن بهذا الرقم" },
-        { status: 404 }
-      );
-    }
-
-    if (!targetUser.email) {
-      return NextResponse.json(
-        { ok: false, error: "حساب الأدمن غير مُهيّأ بشكل صحيح" },
-        { status: 500 }
+        { ok: false, error: GENERIC_LOGIN_ERROR },
+        { status: 401 }
       );
     }
 
@@ -114,10 +109,9 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       .single();
 
     if (teamError || !teamMember) {
-      console.warn(`User ${targetUser.id} not in team_members`);
       return NextResponse.json(
-        { ok: false, error: "هذا الحساب ليس لديه صلاحيات أدمن" },
-        { status: 403 }
+        { ok: false, error: GENERIC_LOGIN_ERROR },
+        { status: 401 }
       );
     }
 
@@ -147,11 +141,8 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       });
 
     if (signInError || !signInData.session) {
-      const errorMsg = signInError?.message === "Invalid login credentials"
-        ? "كلمة المرور غير صحيحة"
-        : signInError?.message || "فشل تسجيل الدخول";
       return NextResponse.json(
-        { ok: false, error: errorMsg },
+        { ok: false, error: GENERIC_LOGIN_ERROR },
         { status: 401 }
       );
     }
@@ -172,7 +163,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
   } catch (error: any) {
     console.error("Admin login error:", error);
     return NextResponse.json(
-      { ok: false, error: "حدث خطأ داخلي: " + error.message },
+      { ok: false, error: "حدث خطأ داخلي" },
       { status: 500 }
     );
   }

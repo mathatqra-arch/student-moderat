@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 // ==========================================
 // Middleware - حماية صفحات الأدمن و APIs
 // المسار المخفي: /go/admin
+// مبدأ Fail-Closed: أي خطأ في المصادقة = رفض الوصول
 // ==========================================
 
 const SUPABASE_URL =
@@ -23,6 +24,29 @@ const PUBLIC_PATHS = [
   "/api/admin/health",
 ];
 
+async function getSession(request: NextRequest): Promise<{ session: unknown | null; error: unknown | null }> {
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll().map((c) => ({
+          name: c.name,
+          value: c.value,
+        }));
+      },
+      setAll() {},
+    },
+  });
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return { session, error: null };
+  } catch (err) {
+    return { session: null, error: err };
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -35,30 +59,13 @@ export async function middleware(request: NextRequest) {
   );
 
   if (isProtectedPage && !isPublicPage) {
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll().map((c) => ({
-            name: c.name,
-            value: c.value,
-          }));
-        },
-        setAll() {},
-      },
-    });
+    const { session, error } = await getSession(request);
 
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        const loginUrl = new URL("/go/admin/login", request.url);
-        loginUrl.searchParams.set("redirect", pathname);
-        return NextResponse.redirect(loginUrl);
-      }
-    } catch (err) {
-      console.error("Middleware auth check failed:", err);
+    // Fail-closed: لو المصادقة فشلت (Supabase متاح مش مثلاً) → تحويل للدخول
+    if (error || !session) {
+      const loginUrl = new URL("/go/admin/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
     }
   }
 
@@ -71,34 +78,19 @@ export async function middleware(request: NextRequest) {
   );
 
   if (isProtectedApi && !isPublicApi) {
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll().map((c) => ({
-            name: c.name,
-            value: c.value,
-          }));
-        },
-        setAll() {},
-      },
-    });
+    const { session, error } = await getSession(request);
 
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        return NextResponse.json(
-          { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-          { status: 401 }
-        );
-      }
-    } catch (err) {
-      console.error("Middleware API auth check failed:", err);
+    // Fail-closed للـ APIs أيضاً
+    if (error) {
       return NextResponse.json(
         { error: "Authentication service unavailable" },
         { status: 503 }
+      );
+    }
+    if (!session) {
+      return NextResponse.json(
+        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
+        { status: 401 }
       );
     }
   }

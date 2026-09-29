@@ -1,15 +1,14 @@
 {
   "name": "batch-management-app",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "opennextjs-cloudflare build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "mcp:start": "tsx mcp/server.ts",
-    "mcp:test": "node scripts/test-mcp.js",
-    "mcp:test:stdio": "node scripts/test-mcp-stdio.mjs",
     "mcp:test:edge": "node scripts/test-mcp.js --edge",
     "admin:list": "node scripts/admin-manage.js list",
     "admin:create": "node scripts/admin-manage.js create"
@@ -20,8 +19,6 @@
     "@supabase/supabase-js": "^2.48.1",
     "clsx": "^2.1.1",
     "dotenv": "^18.0.3",
-    "firebase": "^12.19.0",
-    "firebase-admin": "^14.5.0",
     "lucide-react": "^0.475.0",
     "next": "^16.3.3",
     "react": "^19.0.0",

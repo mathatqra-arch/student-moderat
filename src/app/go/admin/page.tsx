@@ -10,15 +10,17 @@ import {
   LogOut,
   ExternalLink,
   Calendar,
+  Link2,
 } from "lucide-react";
 import InquiriesManager from "@/components/admin/InquiriesManager";
 import ContentManager from "@/components/admin/ContentManager";
 import TeamManager from "@/components/admin/TeamManager";
 import ApiKeyManager from "@/components/admin/ApiKeyManager";
 import ScheduleManager from "@/components/admin/ScheduleManager";
+import QuickLinksManager from "@/components/admin/QuickLinksManager";
 import Link from "next/link";
 
-type TabId = "inquiries" | "content" | "schedules" | "team" | "keys";
+type TabId = "inquiries" | "content" | "schedules" | "links" | "team" | "keys";
 
 interface TabConfig {
   id: TabId;
@@ -32,8 +34,9 @@ const TABS: TabConfig[] = [
   { id: "inquiries", label: "الاستفسارات", shortLabel: "استفسارات", icon: MessageSquare, color: "bg-coral" },
   { id: "content", label: "الإعلانات والتكليفات", shortLabel: "محتوى", icon: FileText, color: "bg-blue" },
   { id: "schedules", label: "الجداول والمواد", shortLabel: "جداول", icon: Calendar, color: "bg-green" },
+  { id: "links", label: "الروابط السريعة", shortLabel: "روابط", icon: Link2, color: "bg-teal" },
   { id: "keys", label: "مفاتيح API", shortLabel: "مفاتيح", icon: Key, color: "bg-purple-soft" },
-  { id: "team", label: "الفريق والصلاحيات", shortLabel: "فريق", icon: Users, color: "bg-teal" },
+  { id: "team", label: "الفريق والصلاحيات", shortLabel: "فريق", icon: Users, color: "bg-yellow" },
 ];
 
 export default function AdminDashboardPage() {
@@ -145,6 +148,7 @@ export default function AdminDashboardPage() {
                 {activeTab === "inquiries" && <InquiriesManager />}
                 {activeTab === "content" && <ContentManager />}
                 {activeTab === "schedules" && <ScheduleManager />}
+                {activeTab === "links" && <QuickLinksManager />}
                 {activeTab === "keys" && <ApiKeyManager />}
                 {activeTab === "team" && <TeamManager />}
               </div>

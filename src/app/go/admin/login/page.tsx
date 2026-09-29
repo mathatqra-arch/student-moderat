@@ -12,7 +12,6 @@ import {
   EyeOff,
   Key,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 function AdminLoginForm() {
   const router = useRouter();
@@ -55,37 +54,35 @@ function AdminLoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-600/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-cream flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Decorative blobs */}
+      <div className="blob-yellow" style={{ top: "-60px", right: "-60px" }} />
+      <div className="blob-coral" style={{ bottom: "5%", left: "5%" }} />
 
-      <div className="absolute top-4 left-4 z-20">
-        <ThemeToggle />
-      </div>
-
-      <div className="max-w-md w-full glass-card p-6 md:p-8 rounded-3xl space-y-6 border border-[rgb(var(--border))] relative z-10 shadow-2xl animate-scale-in-blur">
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl gradient-brand text-white shadow-lg shadow-brand-600/30 mx-auto">
-            <Shield className="w-7 h-7" />
+      <div className="max-w-md w-full relative z-10 animate-slide-up">
+        {/* Logo */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border-2 border-ink bg-yellow shadow-brutal-md mb-3">
+            <Shield className="w-8 h-8 text-ink" />
           </div>
-          <div>
-            <h1 className="text-2xl font-extrabold">لوحة تحكم الأدمن</h1>
-            <p className="text-xs text-[rgb(var(--text-muted))] mt-1">
-              دخول المشرفين — رقم الهاتف + كلمة المرور
-            </p>
-          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight">لوحة تحكم الأدمن</h1>
+          <p className="text-sm text-gray mt-1">دخول المشرفين — رقم الهاتف + كلمة المرور</p>
         </div>
 
+        {/* Error */}
         {errorMsg && (
-          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs p-3 rounded-xl text-center flex items-center justify-center gap-2 animate-fade-in">
+          <div className="brutal-card-flat bg-coral text-cream-light px-4 py-3 rounded-lg text-sm flex items-center gap-2 mb-4 animate-fade-in">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* Form */}
+        <form onSubmit={handleLogin} className="brutal-card p-6 space-y-4">
+          {/* Phone */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-brand-500" />
+            <label className="text-xs font-bold flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" />
               رقم الهاتف
             </label>
             <input
@@ -97,16 +94,15 @@ function AdminLoginForm() {
               required
               autoFocus
               dir="ltr"
-              className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm placeholder-[rgb(var(--text-subtle))] focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition text-left font-mono"
+              className="brutal-input w-full px-3.5 py-2.5 text-sm text-left font-mono"
             />
-            <p className="text-[10px] text-[rgb(var(--text-subtle))]">
-              بصيغة محلية (01012345678) أو E.164 (+201012345678)
-            </p>
+            <p className="text-2xs text-gray">صيغة محلية (01012345678) أو دولية (+201012345678)</p>
           </div>
 
+          {/* Password */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-amber-500" />
+            <label className="text-xs font-bold flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
               كلمة المرور
             </label>
             <div className="relative">
@@ -116,12 +112,12 @@ function AdminLoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition"
+                className="brutal-input w-full px-3.5 py-2.5 pr-10 text-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))]"
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-1 text-gray hover:text-ink transition"
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -129,10 +125,11 @@ function AdminLoginForm() {
             </div>
           </div>
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full gradient-brand text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 text-sm hover:-translate-y-0.5 disabled:opacity-60"
+            className="brutal-btn w-full py-3 flex items-center justify-center gap-2 text-sm"
           >
             {loading ? (
               <>
@@ -148,10 +145,11 @@ function AdminLoginForm() {
           </button>
         </form>
 
-        <div className="bg-brand-500/10 border border-brand-500/20 p-3 rounded-xl text-[11px] text-[rgb(var(--text-muted))] space-y-1">
-          <p className="font-semibold text-brand-500">للأدمن الأساسي:</p>
-          <p>الهاتف: <code className="font-mono text-brand-500">01040945655</code></p>
-          <p>كلمة المرور الافتراضية: <code className="font-mono text-brand-500">000000</code></p>
+        {/* Default credentials hint */}
+        <div className="brutal-card-flat bg-yellow p-3 rounded-lg mt-4 text-xs space-y-1">
+          <p className="font-extrabold">🔑 للأدمن الأساسي:</p>
+          <p>الهاتف: <code className="font-mono font-bold">01040945655</code></p>
+          <p>كلمة المرور: <code className="font-mono font-bold">000000</code></p>
         </div>
       </div>
     </div>
@@ -162,8 +160,8 @@ export default function AdminLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[rgb(var(--bg))] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+        <div className="min-h-screen bg-cream flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-ink" />
         </div>
       }
     >

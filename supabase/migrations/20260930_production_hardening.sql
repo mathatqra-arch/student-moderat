@@ -113,11 +113,9 @@ END;
 $$;
 
 -- Trigger عام: حد للإدخالات المجهولة (قبل INSERT)
-CREATE OR REPLACE FUNCTION public.enforce_anon_rate_limit(
-    p_bucket         TEXT,
-    p_max            INT,
-    p_window_seconds INT
-)
+-- ⚠️ دوال الـ Triggers في PostgreSQL لا يمكن أن تعلن وسائط في توقيعها (42P13)
+-- الوسائط تُمرر من CREATE TRIGGER وتُقرأ هنا عبر TG_NARGS / TG_ARGV
+CREATE OR REPLACE FUNCTION public.enforce_anon_rate_limit()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -126,13 +124,25 @@ AS $$
 DECLARE
     v_result JSONB;
     v_ip     TEXT;
+    v_bucket TEXT;
+    v_max    INT;
+    v_window INT;
 BEGIN
+    IF TG_NARGS < 3 THEN
+        RAISE EXCEPTION 'enforce_anon_rate_limit يتطلب 3 وسائط: (bucket, max, window_seconds)'
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    v_bucket := TG_ARGV[0];
+    v_max    := TG_ARGV[1]::INT;
+    v_window := TG_ARGV[2]::INT;
+
     v_ip := public.get_request_ip();
     IF v_ip IS NULL THEN
         RETURN NEW; -- لا يوجد IP (اتصال داخلي) → اسمح
     END IF;
 
-    v_result := public.rate_limit_hit(p_bucket || ':' || v_ip, p_window_seconds, p_max);
+    v_result := public.rate_limit_hit(v_bucket || ':' || v_ip, v_window, v_max);
     IF (v_result->>'allowed')::BOOLEAN IS NOT TRUE THEN
         RAISE EXCEPTION 'تم تجاوز الحد المسموح من الإرسال. حاول بعد % ثانية', v_result->>'retry_after'
             USING ERRCODE = 'P0001';
@@ -241,6 +251,7 @@ $$;
 
 -- --- announcements ---
 DROP POLICY IF EXISTS "Allow admin full access for announcements" ON public.announcements;
+DROP POLICY IF EXISTS "Team admin full access announcements" ON public.announcements;
 CREATE POLICY "Team admin full access announcements"
     ON public.announcements FOR ALL
     USING (public.is_team_admin())
@@ -248,6 +259,7 @@ CREATE POLICY "Team admin full access announcements"
 
 -- --- tasks ---
 DROP POLICY IF EXISTS "Allow admin full access for tasks" ON public.tasks;
+DROP POLICY IF EXISTS "Team admin full access tasks" ON public.tasks;
 CREATE POLICY "Team admin full access tasks"
     ON public.tasks FOR ALL
     USING (public.is_team_admin())
@@ -255,6 +267,7 @@ CREATE POLICY "Team admin full access tasks"
 
 -- --- inquiries (الإدخال العام يبقى، الكتابة الكاملة للأدمن فقط) ---
 DROP POLICY IF EXISTS "Allow authenticated admin full access to inquiries" ON public.inquiries;
+DROP POLICY IF EXISTS "Team admin full access inquiries" ON public.inquiries;
 CREATE POLICY "Team admin full access inquiries"
     ON public.inquiries FOR ALL
     USING (public.is_team_admin())
@@ -263,6 +276,7 @@ CREATE POLICY "Team admin full access inquiries"
 
 -- --- quick_links ---
 DROP POLICY IF EXISTS "Allow admin full access for quick_links" ON public.quick_links;
+DROP POLICY IF EXISTS "Team admin full access quick_links" ON public.quick_links;
 CREATE POLICY "Team admin full access quick_links"
     ON public.quick_links FOR ALL
     USING (public.is_team_admin())
@@ -270,6 +284,7 @@ CREATE POLICY "Team admin full access quick_links"
 
 -- --- subjects ---
 DROP POLICY IF EXISTS "Allow admin manage subjects" ON public.subjects;
+DROP POLICY IF EXISTS "Team admin full access subjects" ON public.subjects;
 CREATE POLICY "Team admin full access subjects"
     ON public.subjects FOR ALL
     USING (public.is_team_admin())
@@ -277,6 +292,7 @@ CREATE POLICY "Team admin full access subjects"
 
 -- --- schedules ---
 DROP POLICY IF EXISTS "Allow admin manage schedules" ON public.schedules;
+DROP POLICY IF EXISTS "Team admin full access schedules" ON public.schedules;
 CREATE POLICY "Team admin full access schedules"
     ON public.schedules FOR ALL
     USING (public.is_team_admin())
@@ -284,6 +300,7 @@ CREATE POLICY "Team admin full access schedules"
 
 -- --- important_dates ---
 DROP POLICY IF EXISTS "Allow admin manage important_dates" ON public.important_dates;
+DROP POLICY IF EXISTS "Team admin full access important_dates" ON public.important_dates;
 CREATE POLICY "Team admin full access important_dates"
     ON public.important_dates FOR ALL
     USING (public.is_team_admin())
@@ -291,6 +308,7 @@ CREATE POLICY "Team admin full access important_dates"
 
 -- --- submissions ---
 DROP POLICY IF EXISTS "Allow admin manage submissions" ON public.submissions;
+DROP POLICY IF EXISTS "Team admin full access submissions" ON public.submissions;
 CREATE POLICY "Team admin full access submissions"
     ON public.submissions FOR ALL
     USING (public.is_team_admin())
@@ -298,6 +316,7 @@ CREATE POLICY "Team admin full access submissions"
 
 -- --- attendance ---
 DROP POLICY IF EXISTS "Allow admin manage attendance" ON public.attendance;
+DROP POLICY IF EXISTS "Team admin full access attendance" ON public.attendance;
 CREATE POLICY "Team admin full access attendance"
     ON public.attendance FOR ALL
     USING (public.is_team_admin())
@@ -305,6 +324,7 @@ CREATE POLICY "Team admin full access attendance"
 
 -- --- app_settings ---
 DROP POLICY IF EXISTS "Allow admin manage settings" ON public.app_settings;
+DROP POLICY IF EXISTS "Team admin full access app_settings" ON public.app_settings;
 CREATE POLICY "Team admin full access app_settings"
     ON public.app_settings FOR ALL
     USING (public.is_team_admin())
@@ -312,6 +332,7 @@ CREATE POLICY "Team admin full access app_settings"
 
 -- --- notifications_log ---
 DROP POLICY IF EXISTS "Allow admin manage notifications" ON public.notifications_log;
+DROP POLICY IF EXISTS "Team admin full access notifications_log" ON public.notifications_log;
 CREATE POLICY "Team admin full access notifications_log"
     ON public.notifications_log FOR ALL
     USING (public.is_team_admin())
@@ -320,6 +341,7 @@ CREATE POLICY "Team admin full access notifications_log"
 -- --- settings ---
 DROP POLICY IF EXISTS "Allow admin full access to settings" ON public.settings;
 DROP POLICY IF EXISTS "Allow admin manage settings" ON public.settings;
+DROP POLICY IF EXISTS "Team admin full access settings" ON public.settings;
 CREATE POLICY "Team admin full access settings"
     ON public.settings FOR ALL
     USING (public.is_team_admin())
@@ -327,18 +349,21 @@ CREATE POLICY "Team admin full access settings"
 
 -- --- team_members ---
 DROP POLICY IF EXISTS "Allow admin full access to team_members" ON public.team_members;
+DROP POLICY IF EXISTS "Team admin full access team_members" ON public.team_members;
 CREATE POLICY "Team admin full access team_members"
     ON public.team_members FOR ALL
     USING (public.is_team_admin())
     WITH CHECK (public.is_team_admin());
 -- السماح للأعضاء بقراءة بيانات الفريق (مطلوب لفحص is_team_admin من العميل)
 DROP POLICY IF EXISTS "Allow authenticated read team_members" ON public.team_members;
+DROP POLICY IF EXISTS "Team admin read team_members" ON public.team_members;
 CREATE POLICY "Team admin read team_members"
     ON public.team_members FOR SELECT
     USING (public.is_team_admin());
 
 -- --- push_subscriptions ---
 DROP POLICY IF EXISTS "Allow admin read subscriptions" ON public.push_subscriptions;
+DROP POLICY IF EXISTS "Team admin full access push_subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Team admin full access push_subscriptions"
     ON public.push_subscriptions FOR ALL
     USING (public.is_team_admin())
@@ -383,3 +408,8 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_key_value
     ON public.api_keys(key_value) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_api_keys_revoked
     ON public.api_keys(revoked_at);
+
+-- ==========================================
+-- 8) إزالة جدول OTP القديم (تم إزالة OTP من الموقع نهائياً)
+-- ==========================================
+DROP TABLE IF EXISTS public.admin_otps CASCADE;

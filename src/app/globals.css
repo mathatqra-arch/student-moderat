@@ -432,6 +432,130 @@
   /* Theme toggle — hidden in brutalist (cream only) */
   .theme-toggle-hidden { display: none !important; }
 
+  /* ==========================================
+     Admin Component Overrides — Brutalist
+     يحوّل الـ dark theme classes القديمة لـ brutalist style
+     ========================================== */
+
+  /* Glass → brutal card */
+  .glass-card {
+    background: var(--cream-light) !important;
+    backdrop-filter: none !important;
+    border: 2px solid var(--ink) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+
+  /* Dark bg → cream */
+  .bg-dark-bg, .bg-gray-900\/60, .bg-gray-900, .bg-gray-950 {
+    background: var(--cream-light) !important;
+  }
+
+  /* Text colors */
+  .text-gray-100, .text-white { color: var(--ink) !important; }
+  .text-gray-200, .text-gray-300 { color: var(--ink-soft) !important; }
+  .text-gray-400, .text-gray-500 { color: var(--gray) !important; }
+  .text-blue-400, .text-blue-500 { color: var(--blue-dark) !important; }
+  .text-emerald-300, .text-emerald-400 { color: var(--teal-dark) !important; }
+  .text-rose-300, .text-rose-400 { color: var(--coral) !important; }
+  .text-amber-400 { color: var(--yellow-dark) !important; }
+  .text-purple-300, .text-purple-400 { color: var(--purple-dark) !important; }
+
+  /* Borders */
+  .border-gray-700, .border-gray-800 { border-color: var(--gray-lighter) !important; }
+
+  /* Backgrounds */
+  .bg-gray-800\/80, .bg-gray-800 {
+    background: var(--gray-bg) !important;
+  }
+
+  /* Status badges */
+  .bg-rose-500\/10 {
+    background: rgba(255, 107, 107, 0.15) !important;
+    border: 1.5px solid var(--coral) !important;
+    color: var(--coral) !important;
+  }
+  .bg-amber-500\/10 {
+    background: rgba(255, 213, 79, 0.2) !important;
+    border: 1.5px solid var(--yellow-dark) !important;
+    color: var(--yellow-dark) !important;
+  }
+  .bg-emerald-500\/10 {
+    background: rgba(102, 187, 106, 0.15) !important;
+    border: 1.5px solid var(--green) !important;
+    color: var(--green) !important;
+  }
+
+  /* Inputs in admin */
+  .bg-gray-900, input[type="text"], input[type="email"], input[type="password"], input[type="tel"], textarea, select {
+    background: var(--cream-white) !important;
+    border: 2px solid var(--ink) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--ink-soft) !important;
+  }
+
+  input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="tel"]:focus, textarea:focus, select:focus {
+    outline: none !important;
+    box-shadow: var(--shadow-sm) !important;
+    border-color: var(--ink) !important;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: var(--gray-light) !important;
+  }
+
+  /* Buttons */
+  .bg-blue-600, .bg-blue-500 {
+    background: var(--ink) !important;
+    color: var(--cream-light) !important;
+    border: 2px solid var(--ink) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+
+  .bg-emerald-600, .bg-emerald-500 {
+    background: var(--green) !important;
+    color: var(--ink) !important;
+    border: 2px solid var(--ink) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+
+  .bg-rose-900\/40, .bg-rose-600 {
+    background: var(--coral) !important;
+    color: var(--cream-light) !important;
+    border: 2px solid var(--ink) !important;
+    border-radius: var(--radius-sm) !important;
+  }
+
+  /* Glass panel → cream */
+  .glass-panel {
+    background: var(--cream-light) !important;
+    backdrop-filter: none !important;
+    border: 1px solid var(--gray-lighter) !important;
+  }
+
+  /* Emerald success messages */
+  .bg-emerald-950\/80 {
+    background: rgba(102, 187, 106, 0.15) !important;
+    border: 2px solid var(--green) !important;
+    border-radius: var(--radius-lg) !important;
+    color: var(--teal-dark) !important;
+  }
+
+  /* Purple MCP sections */
+  .bg-purple-950\/10, .bg-purple-950\/30 {
+    background: rgba(179, 136, 255, 0.1) !important;
+    border: 2px solid var(--purple) !important;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  /* Select dropdowns */
+  select option {
+    background: var(--cream-light) !important;
+    color: var(--ink) !important;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;

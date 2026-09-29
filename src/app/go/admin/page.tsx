@@ -10,7 +10,6 @@ import {
   LogOut,
   ExternalLink,
   Calendar,
-  Bell,
 } from "lucide-react";
 import InquiriesManager from "@/components/admin/InquiriesManager";
 import ContentManager from "@/components/admin/ContentManager";
@@ -30,16 +29,17 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { id: "inquiries", label: "الاستفسارات", shortLabel: "الاستفسارات", icon: MessageSquare, color: "bg-coral" },
-  { id: "content", label: "الإعلانات والتكليفات", shortLabel: "المحتوى", icon: FileText, color: "bg-blue" },
-  { id: "schedules", label: "الجداول والمواد", shortLabel: "الجداول", icon: Calendar, color: "bg-green" },
-  { id: "keys", label: "مفاتيح API", shortLabel: "المفاتيح", icon: Key, color: "bg-purple-soft" },
-  { id: "team", label: "الفريق والصلاحيات", shortLabel: "الفريق", icon: Users, color: "bg-teal" },
+  { id: "inquiries", label: "الاستفسارات", shortLabel: "استفسارات", icon: MessageSquare, color: "bg-coral" },
+  { id: "content", label: "الإعلانات والتكليفات", shortLabel: "محتوى", icon: FileText, color: "bg-blue" },
+  { id: "schedules", label: "الجداول والمواد", shortLabel: "جداول", icon: Calendar, color: "bg-green" },
+  { id: "keys", label: "مفاتيح API", shortLabel: "مفاتيح", icon: Key, color: "bg-purple-soft" },
+  { id: "team", label: "الفريق والصلاحيات", shortLabel: "فريق", icon: Users, color: "bg-teal" },
 ];
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<TabId>("inquiries");
-  const [notifCount] = useState(0);
+
+  const activeTabConfig = TABS.find((t) => t.id === activeTab);
 
   return (
     <div className="min-h-screen bg-cream text-ink relative overflow-hidden">
@@ -56,8 +56,8 @@ export default function AdminDashboardPage() {
                 <Shield className="w-5 h-5 text-ink" />
               </div>
               <div>
-                <h1 className="font-extrabold text-base tracking-tight">لوحة الأدمن</h1>
-                <div className="flex items-center gap-1.5">
+                <h1 className="font-extrabold text-base tracking-tight text-ink">لوحة الأدمن</h1>
+                <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-green border border-ink" />
                   <span className="text-2xs font-bold text-gray">إشراف نشط</span>
                 </div>
@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
                     <div className={`w-7 h-7 rounded-lg border-2 border-ink ${tab.color} flex items-center justify-center flex-shrink-0`}>
                       <Icon className="w-3.5 h-3.5 text-ink" />
                     </div>
-                    <span className="text-sm">{tab.label}</span>
+                    <span className="text-sm font-bold">{tab.label}</span>
                   </button>
                 );
               })}
@@ -89,15 +89,14 @@ export default function AdminDashboardPage() {
               <Link
                 href="/student"
                 target="_blank"
-                className="brutal-btn-ghost w-full py-2 px-3 flex items-center justify-center gap-2 text-xs"
+                className="brutal-btn-ghost w-full py-2.5 px-3 flex items-center justify-center gap-2 text-xs"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>معاينة الطلاب</span>
               </Link>
               <Link
                 href="/go/admin/login"
-                className="brutal-btn-ghost w-full py-2 px-3 flex items-center justify-center gap-2 text-xs border-coral text-coral"
-                style={{ borderColor: "var(--coral)" }}
+                className="w-full py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-bold border-2 border-ink rounded-md text-coral hover:bg-coral hover:text-cream-light transition"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>تسجيل الخروج</span>
@@ -110,63 +109,35 @@ export default function AdminDashboardPage() {
         <div className="flex-1 flex flex-col min-h-screen">
           {/* Mobile Header */}
           <header className="lg:hidden sticky top-0 z-30 bg-cream-light border-b-2 border-ink px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-lg border-2 border-ink bg-yellow shadow-brutal-sm flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-ink" />
-                </div>
-                <h1 className="font-extrabold text-sm">لوحة الأدمن</h1>
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg border-2 border-ink bg-yellow shadow-brutal-sm flex items-center justify-center">
+                <Shield className="w-4 h-4 text-ink" />
               </div>
-              {notifCount > 0 && (
-                <div className="brutal-badge bg-coral text-cream-light">
-                  <Bell className="w-3 h-3" />
-                  {notifCount}
-                </div>
-              )}
+              <h1 className="font-extrabold text-sm text-ink">لوحة الأدمن</h1>
             </div>
           </header>
 
           {/* Content */}
           <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8">
             <div className="max-w-5xl mx-auto">
-              {/* Mobile tabs */}
-              <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto no-scrollbar mb-4 pb-1">
-                {TABS.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex-shrink-0 px-3 py-2 rounded-lg border-2 text-xs font-bold transition ${
-                        isActive
-                          ? "border-ink bg-ink text-cream-light shadow-brutal-sm"
-                          : "border-ink bg-cream-light text-gray"
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5 inline ml-1" />
-                      {tab.shortLabel}
-                    </button>
-                  );
-                })}
+              {/* Desktop section header */}
+              <div className="hidden lg:flex items-center gap-3 mb-6">
+                <div className={`w-10 h-10 rounded-xl border-2 border-ink ${activeTabConfig?.color || "bg-yellow"} flex items-center justify-center shadow-brutal-sm`}>
+                  {(() => {
+                    const Icon = activeTabConfig?.icon || Shield;
+                    return <Icon className="w-5 h-5 text-ink" />;
+                  })()}
+                </div>
+                <h2 className="text-xl font-extrabold tracking-tight text-ink">
+                  {activeTabConfig?.label}
+                </h2>
               </div>
 
-              {/* Desktop section header */}
-              <div className="hidden lg:flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  {(() => {
-                    const tab = TABS.find((t) => t.id === activeTab);
-                    const Icon = tab?.icon || Shield;
-                    return (
-                      <div className={`w-10 h-10 rounded-xl border-2 border-ink ${tab?.color || "bg-yellow"} flex items-center justify-center shadow-brutal-sm`}>
-                        <Icon className="w-5 h-5 text-ink" />
-                      </div>
-                    );
-                  })()}
-                  <h2 className="text-xl font-extrabold tracking-tight">
-                    {TABS.find((t) => t.id === activeTab)?.label}
-                  </h2>
-                </div>
+              {/* Mobile section header */}
+              <div className="lg:hidden mb-4">
+                <h2 className="text-lg font-extrabold tracking-tight text-ink">
+                  {activeTabConfig?.shortLabel}
+                </h2>
               </div>
 
               {/* Tab content */}
@@ -192,14 +163,14 @@ export default function AdminDashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border-2 transition ${
+                className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border-2 transition ${
                   isActive
                     ? "border-ink bg-yellow shadow-brutal-sm"
                     : "border-transparent text-gray"
                 }`}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-2xs mt-0.5 font-bold">{tab.shortLabel}</span>
+                <Icon className={`w-5 h-5 ${isActive ? "text-ink" : ""}`} />
+                <span className={`text-2xs mt-1 font-bold ${isActive ? "text-ink" : "text-gray"}`}>{tab.shortLabel}</span>
               </button>
             );
           })}

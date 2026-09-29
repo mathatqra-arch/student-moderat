@@ -28,6 +28,20 @@ type Tab = "home" | "schedule" | "tasks" | "inquiry" | "links";
 const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 // Groups removed - all sessions shown together
 
+// ==========================================
+// حساب أقرب موعد قادم لجلسة أسبوعية (day_of_week + start_time)
+// ==========================================
+function nextSessionDate(dayOfWeek: number, startTime: string): Date {
+  const now = new Date();
+  const parts = (startTime || "00:00").split(":");
+  const h = parseInt(parts[0] || "0", 10) || 0;
+  const m = parseInt(parts[1] || "0", 10) || 0;
+  const add = (((dayOfWeek - now.getDay()) % 7) + 7) % 7;
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + add, h, m, 0);
+  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 7);
+  return d;
+}
+
 export default function StudentPage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
 
@@ -147,19 +161,44 @@ function MobileTabButton({ active, onClick, icon: Icon, label }: { active: boole
 // ==========================================
 function HomeTab() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [upcomingDates, setUpcomingDates] = useState<any[]>([]);
+  const [upcoming, setUpcoming] = useState<any[]>([]);
+  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient();
-      const [annRes, datesRes] = await Promise.all([
+      const nowISO = new Date().toISOString();
+      const [annRes, datesRes, schedRes, tasksRes] = await Promise.all([
         supabase.from("announcements").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("important_dates").select("*, subjects(*)").gte("date", new Date().toISOString()).order("date", { ascending: true }).limit(10),
+        supabase.from("important_dates").select("*, subjects(*)").gte("date", nowISO).order("date", { ascending: true }).limit(10),
+        // الجدول الأسبوعي مرتب: اليوم ثم الوقت
+        supabase.from("schedules").select("*, subjects(name, color)").eq("is_active", true).order("day_of_week").order("start_time"),
+        // التكليفات القادمة — من الأقرب انتهاءً
+        supabase.from("tasks").select("*").eq("status", "active").gte("deadline", nowISO).order("deadline", { ascending: true }).limit(5),
       ]);
       setAnnouncements(annRes.data || []);
-      setUpcomingDates(datesRes.data || []);
+
+      // مواعيد قادمة = المواعيد المهمة + أقرب الحصص القادمة من الجدول الأسبوعي
+      const dateItems = (datesRes.data || []).map((d: any) => ({
+        key: `date-${d.id}`,
+        kind: "date" as const,
+        when: new Date(d.date),
+        data: d,
+      }));
+      const sessionItems = (schedRes.data || []).map((s: any) => ({
+        key: `sess-${s.id}`,
+        kind: "session" as const,
+        when: nextSessionDate(s.day_of_week, s.start_time),
+        data: s,
+      }));
+      const unified = [...dateItems, ...sessionItems]
+        .sort((a, b) => a.when.getTime() - b.when.getTime())
+        .slice(0, 8);
+
+      setUpcoming(unified);
+      setUpcomingTasks(tasksRes.data || []);
       setLoading(false);
     };
     fetchData();
@@ -201,18 +240,39 @@ function HomeTab() {
         )}
       </div>
 
-      {/* Upcoming Dates — 1/3 */}
+      {/* Upcoming Dates + Schedule — 1/3 */}
       <div className="space-y-4">
         <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
           <Clock className="w-5 h-5" />
           مواعيد قادمة
         </h2>
-        {upcomingDates.length === 0 ? (
+        {upcoming.length === 0 ? (
           <EmptyState icon={Clock} message="لا توجد مواعيد" />
         ) : (
           <div className="space-y-3">
-            {upcomingDates.map((date) => (
-              <DateCard key={date.id} date={date} />
+            {upcoming.map((item: any) =>
+              item.kind === "date" ? (
+                <DateCard key={item.key} date={item.data} />
+              ) : (
+                <NextSessionCard key={item.key} session={item.data} when={item.when} />
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* تكليفات جديدة — مرتبة من الأقرب انتهاءً */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5" />
+          تكليفات جديدة
+        </h2>
+        {upcomingTasks.length === 0 ? (
+          <EmptyState icon={CheckCircle2} message="لا توجد تكليفات قادمة" />
+        ) : (
+          <div className="space-y-3">
+            {upcomingTasks.map((task) => (
+              <TaskCard key={task.id} task={task} />
             ))}
           </div>
         )}
@@ -247,6 +307,10 @@ function ScheduleTab() {
     if (!grouped[s.day_of_week]) grouped[s.day_of_week] = [];
     grouped[s.day_of_week].push(s);
   });
+  // ترتيب صريح حسب الوقت داخل كل يوم (ضمان إضافي فوق ترتيب الاستعلام)
+  Object.values(grouped).forEach((arr) =>
+    arr.sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")))
+  );
 
   if (loading) return <LoadingState />;
 
@@ -572,6 +636,46 @@ function AnnouncementCard({ announcement }: { announcement: any }) {
       </div>
       <h3 className="font-extrabold text-sm leading-snug text-ink">{announcement.title}</h3>
       <p className="text-xs text-ink-light leading-relaxed whitespace-pre-line">{announcement.content}</p>
+    </div>
+  );
+}
+
+// ==========================================
+// Next Session Card — أقرب حصة قادمة من الجدول الأسبوعي
+// ==========================================
+function NextSessionCard({ session, when }: { session: any; when: Date }) {
+  const subject = session.subjects;
+  const color = subject?.color || "#FFD54F";
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const daysUntil = Math.round((startOfDay(when) - startOfDay(new Date())) / 86400000);
+  const loc = (session.location || session.room || "").toLowerCase();
+  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين") || session.lecture_type === "online";
+
+  const typeLabel = session.type === "lecture" ? "محاضرة" : session.type === "lab" ? "معمل" : session.type === "tutorial" ? "سكشن" : session.type === "exam" ? "امتحان" : (session.type || "حصة");
+  const typeBg = session.type === "exam" ? "bg-coral" : session.type === "lab" ? "bg-purple-soft" : session.type === "tutorial" ? "bg-teal" : "bg-blue";
+
+  return (
+    <div className="brutal-card p-3 flex items-center gap-3">
+      <div className="w-1.5 h-12 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`brutal-badge ${typeBg}`}>
+            <BookOpen className="w-2.5 h-2.5" />
+            {typeLabel}
+          </span>
+          <span className="brutal-badge bg-cream-dark text-ink">أسبوعي</span>
+        </div>
+        <h3 className="font-bold text-sm truncate text-ink mt-1">{subject?.name || "—"}</h3>
+        <p className="text-2xs text-gray font-bold">
+          {DAYS[session.day_of_week]} · {when.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })} · {session.start_time?.slice(0, 5)}
+          {isOnline ? " · أونلاين" : session.room ? ` · ${session.room}` : ""}
+        </p>
+      </div>
+      {daysUntil <= 7 && daysUntil >= 0 && (
+        <span className="brutal-badge bg-yellow text-ink">
+          {daysUntil === 0 ? "اليوم" : daysUntil === 1 ? "غداً" : `${daysUntil}ي`}
+        </span>
+      )}
     </div>
   );
 }

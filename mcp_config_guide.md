@@ -8,7 +8,7 @@
 https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 ```
 
-**الإصدار:** v3.1.0 — بروتوكول `2025-06-18` | ~55 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل
+**الإصدار:** v3.2.0 — بروتوكول `2025-06-18` | ~58 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل
 
 ---
 
@@ -73,7 +73,10 @@ https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 `list_announcements` · `get_announcement` · `create_announcement` · `update_announcement` · `delete_announcement` · `list_tasks` · `get_task` · `create_task` · `create_academic_task` · `update_task` · `delete_task`
 
 ### المواد والجدول
-`list_subjects` · `create_subject` · `update_subject` · `delete_subject` · `list_schedule` (بفلتر المجموعة أ/ب/ج/د ونوع الحضور) · `create_schedule_session` · `update_schedule_session` · `delete_schedule_session`
+`list_subjects` · `create_subject` · `update_subject` · `delete_subject` · **`upsert_subject_by_name` (بالاسم مباشرة — بدون UUID)** · `list_schedule` (بفلتر المجموعة أ/ب/ج/د ونوع الحضور) · **`get_week_schedule` (الجدول كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت)** · `create_schedule_session` · **`set_schedule_session` (بالاسم مباشرة — يُنشئ المادة تلقائياً لو غير موجودة)** · `update_schedule_session` · `delete_schedule_session`
+
+> 💡 **أسهل طريقة لإضافة المواد والجدول من ChatGPT:** قل للـ MCP:
+> "ضيف مادة قواعد بيانات ومحاضرة يوم الإثنين 10:00-12:00 أونلاين" → سيستخدم `upsert_subject_by_name` ثم `set_schedule_session` بدون أي معرفات.
 
 ### المواعيد والروابط
 `list_important_dates` · `create_important_date` · `update_important_date` · `delete_important_date` · `list_quick_links` · `create_quick_link` (**روابط المحاضرات** — يتطلب http/https صالح) · `update_quick_link` · `delete_quick_link`
@@ -88,6 +91,13 @@ https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 `list_settings` · `set_setting` · `delete_setting` · `list_notification_logs` · `create_notification_log` · `delete_notification_log` · `list_team_members` · `create_team_member` · `update_team_member` · `delete_team_member` · **`list_api_keys` · `create_api_key` · `revoke_api_key` · `delete_api_key`** · `list_push_subscriptions` · `delete_push_subscription`
 
 ---
+
+## 🔒 ما الجديد في v3.2
+
+- ✅ **`upsert_subject_by_name`** — إضافة مادة بالاسم مباشرة بدون UUID (يرجع الموجودة لو اسمها مطابق)
+- ✅ **`set_schedule_session`** — إضافة جلسة للجدول بالاسم مباشرة، **يُنشئ المادة تلقائياً** لو غير موجودة + تحقق من صيغة الوقت HH:MM
+- ✅ **`get_week_schedule`** — الجدول الأسبوعي كاملاً: الأيام بالترتيب والحصص مرتبة حسب الوقت + ملخص سريع لكل يوم
+- ✅ ترتيب الجدول في الواجهة حسب الوقت + مواعيد قادمة تجمع أقرب الحصص من الجدول + تكليفات جديدة مرتبة من الأقرب انتهاءً
 
 ## 🔒 ما الجديد في v3.1
 

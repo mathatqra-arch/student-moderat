@@ -65,6 +65,9 @@ const TOOLS: Tool[] = [
   { name: "create_schedule_session", description: "إضافة جلسة للجدول — تدقيق المجموعة (أ/ب/ج/د) ونوع الحضور (جامعة/أونلاين).", inputSchema: objectSchema({ subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: "HH:MM" }, end_time: { type: "string", description: "HH:MM" }, room: { type: "string" }, type: strEnum(["lecture", "lab", "tutorial", "exam"]), group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), notes: { type: "string" } }, ["subject_id", "day_of_week", "start_time", "end_time"]) },
   { name: "update_schedule_session", description: "تعديل جلسة جدول.", inputSchema: objectSchema({ schedule_id: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string" }, end_time: { type: "string" }, room: { type: "string" }, type: strEnum(["lecture", "lab", "tutorial", "exam"]), group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), notes: { type: "string" }, is_active: { type: "boolean" } }, ["schedule_id"]) },
   { name: "delete_schedule_session", description: "حذف جلسة من الجدول.", inputSchema: objectSchema({ schedule_id: { type: "string" } }, ["schedule_id"]) },
+  { name: "get_week_schedule", description: "عرض الجدول الأسبوعي كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت داخل كل يوم (الأداة الأفضل لمشاهدة الجدول كاملاً).", inputSchema: objectSchema({ group: strEnum(["أ", "ب", "ج", "د", "all"]) }) },
+  { name: "upsert_subject_by_name", description: "إضافة مادة جديدة بالاسم مباشرة (بدون UUID) — لو فيه مادة بنفس الاسم يرجعها كما هي بدون تكرار.", inputSchema: objectSchema({ name: { type: "string" }, code: { type: "string" }, instructor: { type: "string" }, color: { type: "string", description: "hex مثل #3b82f6" }, icon: { type: "string" }, semester: { type: "string" }, credits: { type: "integer" } }, ["name"]) },
+  { name: "set_schedule_session", description: "إضافة جلسة للجدول بالاسم مباشرة — لو المادة غير موجودة يتم إنشاؤها تلقائياً (لا حاجة لمعرفة subject_id). مثال: محاضرة قواعد بيانات يوم الإثنين 10:00.", inputSchema: objectSchema({ subject_name: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, start_time: { type: "string", description: "HH:MM" }, end_time: { type: "string", description: "HH:MM" }, room: { type: "string" }, type: strEnum(["lecture", "lab", "tutorial", "exam"]), group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), notes: { type: "string" } }, ["day_of_week", "start_time", "end_time"]) },
 
   // ─── المواعيد المهمة ───
   { name: "list_important_dates", description: "عرض المواعيد المهمة (امتحانات، تسليمات، إجازات).", inputSchema: objectSchema({ type: strEnum(["exam", "deadline", "holiday", "event", "registration"]), upcoming_only: { type: "boolean", default: false }, limit: { type: "integer", default: 50 } }) },
@@ -458,6 +461,71 @@ async function executeTool(name: string, args: any, supabase: any) {
     case "update_schedule_session": { const { schedule_id, ...patch } = args || {}; return rowResult(table(supabase, "schedules").update(stripUndefined(patch)).eq("id", schedule_id).select("*, subjects(*)").single()); }
     case "delete_schedule_session": return rowResult(table(supabase, "schedules").delete().eq("id", args.schedule_id).select().single());
 
+    // ─── المواد والجدول بالاسم مباشرة (v3.2 — بدون الحاجة لـ UUID) ───
+    case "get_week_schedule": {
+      let q = table(supabase, "schedules")
+        .select("*, subjects(name, color)")
+        .eq("is_active", true)
+        .order("day_of_week")
+        .order("start_time");
+      if (args?.group) q = q.in('"group"', [args.group, "all"]);
+      const { data, error } = await q;
+      if (error) throw error;
+      const dayNames = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+      const byDay: Record<string, any[]> = {};
+      for (const s of data || []) {
+        const k = String(s.day_of_week);
+        if (!byDay[k]) byDay[k] = [];
+        byDay[k].push(s);
+      }
+      const summary = Object.keys(byDay).sort().map((d) => ({
+        day: dayNames[Number(d)],
+        sessions_count: byDay[d].length,
+        times: byDay[d].map((x: any) => `${x.start_time?.slice(0, 5)}-${x.end_time?.slice(0, 5)}`),
+      }));
+      return { content: [{ type: "text", text: JSON.stringify({ total_sessions: (data || []).length, week_summary: summary, schedule: data }, null, 2) }] };
+    }
+    case "upsert_subject_by_name": {
+      const name = requireStr(args, "name", 150);
+      const found = await table(supabase, "subjects").select("*").ilike("name", name).limit(1).maybeSingle();
+      if (found.error) throw found.error;
+      if (found.data) {
+        return { content: [{ type: "text", text: JSON.stringify({ ...found.data, _created: false, _message: "المادة موجودة بالفعل — لم يتم التكرار" }, null, 2) }] };
+      }
+      const { subject_name, ...rest } = args || {};
+      const created = await table(supabase, "subjects").insert([stripUndefined({ ...rest, name })]).select().single();
+      if (created.error) throw created.error;
+      return { content: [{ type: "text", text: JSON.stringify({ ...created.data, _created: true, _message: "تم إنشاء المادة بنجاح" }, null, 2) }] };
+    }
+    case "set_schedule_session": {
+      let subjectId: string | undefined = args?.subject_id;
+      let subjectCreated = false;
+      if (!subjectId) {
+        const name = requireStr(args, "subject_name", 150);
+        const found = await table(supabase, "subjects").select("*").ilike("name", name).limit(1).maybeSingle();
+        if (found.error) throw found.error;
+        if (found.data) {
+          subjectId = found.data.id;
+        } else {
+          const created = await table(supabase, "subjects").insert([{ name }]).select().single();
+          if (created.error) throw created.error;
+          subjectId = created.data.id;
+          subjectCreated = true;
+        }
+      }
+      const { subject_name, subject_id, ...rest } = args || {};
+      const row = stripUndefined({ ...rest, subject_id: subjectId });
+      if (!Number.isInteger(row.day_of_week) || row.day_of_week < 0 || row.day_of_week > 6) {
+        throw new Error("day_of_week مطلوب ويجب أن يكون بين 0 (الأحد) و 6 (السبت)");
+      }
+      if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(String(row.start_time || "")) || !/^\d{1,2}:\d{2}(:\d{2})?$/.test(String(row.end_time || ""))) {
+        throw new Error("start_time و end_time مطلوبان بصيغة HH:MM (مثل 09:00 و 11:00)");
+      }
+      const result = await table(supabase, "schedules").insert([row]).select("*, subjects(*)").single();
+      if (result.error) throw result.error;
+      return { content: [{ type: "text", text: JSON.stringify({ ...result.data, _subject_auto_created: subjectCreated, _message: subjectCreated ? "تم إنشاء المادة وإضافة الجلسة للجدول" : "تمت إضافة الجلسة للجدول" }, null, 2) }] };
+    }
+
     // ─── Important dates ───
     case "list_important_dates": {
       let q = table(supabase, "important_dates").select("*, subjects(*)").order("date").limit(limit);
@@ -637,7 +705,7 @@ async function handleJsonRpc(body: any, supabase: any, authCtx: { keyId?: string
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false }, resources: {}, prompts: {}, logging: {} },
-          serverInfo: { name: "student-management-mcp", version: "3.1.0" },
+          serverInfo: { name: "student-management-mcp", version: "3.2.0" },
         },
         id,
       });

@@ -8,7 +8,7 @@
 https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 ```
 
-**الإصدار:** v3.2.0 — بروتوكول `2025-06-18` | ~58 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل
+**الإصدار:** v3.3.0 — بروتوكول `2025-06-18` | ~58 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل
 
 ---
 
@@ -73,10 +73,25 @@ https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 `list_announcements` · `get_announcement` · `create_announcement` · `update_announcement` · `delete_announcement` · `list_tasks` · `get_task` · `create_task` · `create_academic_task` · `update_task` · `delete_task`
 
 ### المواد والجدول
-`list_subjects` · `create_subject` · `update_subject` · `delete_subject` · **`upsert_subject_by_name` (بالاسم مباشرة — بدون UUID)** · `list_schedule` (بفلتر المجموعة أ/ب/ج/د ونوع الحضور) · **`get_week_schedule` (الجدول كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت)** · `create_schedule_session` · **`set_schedule_session` (بالاسم مباشرة — يُنشئ المادة تلقائياً لو غير موجودة)** · `update_schedule_session` · `delete_schedule_session`
+`list_subjects` · `create_subject` · `update_subject` · `delete_subject` · **`upsert_subject_by_name` (بالاسم مباشرة — بدون UUID)** · `list_schedule` (فلترة باليوم والمجموعة والنوع والحضور + كل جلسة مع `time_display` بنظام 12 ساعة) · **`get_week_schedule` (الجدول كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت)** · `create_schedule_session` · **`set_schedule_session` (بالاسم مباشرة — يُنشئ المادة تلقائياً لو غير موجودة)** · `update_schedule_session` · `delete_schedule_session`
 
 > 💡 **أسهل طريقة لإضافة المواد والجدول من ChatGPT:** قل للـ MCP:
-> "ضيف مادة قواعد بيانات ومحاضرة يوم الإثنين 10:00-12:00 أونلاين" → سيستخدم `upsert_subject_by_name` ثم `set_schedule_session` بدون أي معرفات.
+> "ضيف مادة قواعد بيانات وسكشن يوم الإثنين 2:30 م - 4:00 م أونلاين بلينك zoom" → سيستخدم `upsert_subject_by_name` ثم `set_schedule_session` بدون أي معرفات.
+
+#### ⏰ قاعدة الوقت الموحدة (12 ساعة)
+- ✍️ **الإدخال:** اكتب الوقت بنظام 12 ساعة بالعربي أو إنجليزي — `2:30 م` · `10:00 صباحاً` · `2:30 PM` · أو 24 ساعة `14:30` — التحويل تلقائي.
+- 👁️ **الإخراج:** كل جلسة تعود مع `time_display` مثل `2:30 م - 4:00 م` + تسميات عربية `type_ar` و `mode_ar`.
+- 🗄️ **التخزين:** HH:MM بنظام 24 (قاعدة البيانات) — والواجهة كلها تعرض 12 ساعة ص/م.
+
+#### 🎯 نوع الحصة والحضور (عربي أو إنجليزي)
+| الحقل | القيم المقبولة | تُخزن كـ |
+|---|---|---|
+| `type` (نوع الحصة) | `محاضرة` / `lecture` · `سكشن` / `section` / `tutorial` · `معمل` / `lab` · `امتحان` / `exam` · `أي` / `أي حصة` / `other` | lecture / tutorial / lab / exam / other |
+| `lecture_type` (الحضور) | `أونلاين` / `online` · `اوفلاين` / `offline` / `جامعة` · `مختلط` / `hybrid` | online / university / hybrid |
+| `room` (العنوان) | نص حر — مثل: قاعة 101 · مبنى 3 | room |
+| `link` (اللينك) | رابط Zoom/Meet — يجب أن يبدأ بـ https:// | link |
+
+> 📌 الطلاب يرون اللينك كزر **«انضم للحصة»** في الجدول والصفحة الرئيسية للحصص الأونلاين.
 
 ### المواعيد والروابط
 `list_important_dates` · `create_important_date` · `update_important_date` · `delete_important_date` · `list_quick_links` · `create_quick_link` (**روابط المحاضرات** — يتطلب http/https صالح) · `update_quick_link` · `delete_quick_link`
@@ -91,6 +106,15 @@ https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 `list_settings` · `set_setting` · `delete_setting` · `list_notification_logs` · `create_notification_log` · `delete_notification_log` · `list_team_members` · `create_team_member` · `update_team_member` · `delete_team_member` · **`list_api_keys` · `create_api_key` · `revoke_api_key` · `delete_api_key`** · `list_push_subscriptions` · `delete_push_subscription`
 
 ---
+
+## 🔒 ما الجديد في v3.3
+
+- ✅ **الوقت 12 ساعة في كل مكان**: الـ MCP يقبل `2:30 م` / `10:00 ص` / `2:30 PM` / `14:30` ويوحدها تلقائياً + مخرجات `time_display` بنظام 12 ساعة عربي
+- ✅ **نوع الحصة بالعربي**: `محاضرة` / `سكشن` (أو section) / `معمل` / `امتحان` / `أي` — تُحوّل تلقائياً وتُرفض القيم غير المعروفة برسالة واضحة
+- ✅ **الحضور بالعربي**: `أونلاين` / `اوفلاين` / `جامعة` / `مختلط` — تُوحد لقيم قاعدة البيانات
+- ✅ **حقل `link` جديد لجلسات الجدول** (migration: `20260930_schedule_link.sql`): رابط Zoom/Meet منفصل عن القاعة/العنوان + تحقق من صيغة الرابط — ويظهر كزر «انضم للحصة» للطلاب
+- ✅ الواجهة كلها (الطالب + الإدارة) تعرض الوقت 12 ساعة ص/م + حقل منفصل للعنوان واللينك في إضافة الجلسة
+- ✅ اختُبرت السلسلة كاملة على PostgreSQL 16 محلي (24 اختبار) + 65 اختبار لتوحيد المدخلات
 
 ## 🔒 ما الجديد في v3.2
 

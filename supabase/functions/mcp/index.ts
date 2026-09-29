@@ -1,7 +1,8 @@
 // ==========================================
-// Supabase Edge Function: MCP Server v3.1
+// Supabase Edge Function: MCP Server v3.3
 // ~55 أداة تغطي كل وظائف المنصة للأدمن + OAuth 2.1
 // + Rate Limiting ذري + سجل تدقيق + تحقق من المدخلات
+// + الوقت 12 ساعة (ص/م) + نوع الحصة بالعربي + الحضور أونلاين/اوفلاين + رابط الحصة
 //
 // النشر: ./scripts/deploy-edge.sh
 // ==========================================
@@ -29,6 +30,20 @@ const objectSchema = (properties: Record<string, unknown>, required: string[] = 
 type Tool = { name: string; description: string; inputSchema: Record<string, unknown> };
 
 const strEnum = (values: string[]) => ({ type: "string", enum: values });
+
+// ─── أوصاف موحدة لأدوات الجدول (النوع + الحضور + الوقت 12 ساعة + اللينك) ───
+const SCHED_TYPE_DESC = {
+  type: "string",
+  enum: ["lecture", "tutorial", "section", "lab", "exam", "other", "محاضرة", "سكشن", "معمل", "امتحان", "أي"],
+  description: "نوع الحصة: lecture=محاضرة، tutorial/section=سكشن، lab=معمل، exam=امتحان، other=أي حصة أخرى. اكتب بالعربي مباشرة (محاضرة أو سكشن).",
+};
+const SCHED_MODE_DESC = {
+  type: "string",
+  enum: ["online", "offline", "university", "hybrid", "أونلاين", "اوفلاين", "جامعة", "مختلط"],
+  description: "نوع الحضور: online/أونلاين = أونلاين، offline/اوفلاين/جامعة = حضوري، hybrid = مختلط. اكتب بالعربي مباشرة (أونلاين أو أوفلاين).",
+};
+const TIME_DESC = "وقت بنظام 12 ساعة مثل 2:30 م أو 10:00 ص (أو 24 ساعة مثل 14:30) — التحويل تلقائي";
+const LINK_DESC = "رابط الحصة الأونلاين (Zoom/Meet) — يجب أن يبدأ بـ https:// — للحصص الأونلاين أو المختلطة";
 
 // ==========================================
 // الأدوات (~55) — كل وظائف المنصة للأدمن
@@ -60,14 +75,15 @@ const TOOLS: Tool[] = [
   { name: "update_subject", description: "تعديل مادة.", inputSchema: objectSchema({ subject_id: { type: "string" }, name: { type: "string" }, code: { type: "string" }, instructor: { type: "string" }, color: { type: "string" } }, ["subject_id"]) },
   { name: "delete_subject", description: "حذف مادة (تحذير: يحذف جلساتها المجدولة).", inputSchema: objectSchema({ subject_id: { type: "string" } }, ["subject_id"]) },
 
-  // ─── الجدول الأسبوعي (يدعم المجموعات ونوع الحضور) ───
-  { name: "list_schedule", description: "عرض الجدول الأسبوعي مع المواد.", inputSchema: objectSchema({ day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), active_only: { type: "boolean", default: true } }) },
-  { name: "create_schedule_session", description: "إضافة جلسة للجدول — تدقيق المجموعة (أ/ب/ج/د) ونوع الحضور (جامعة/أونلاين).", inputSchema: objectSchema({ subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: "HH:MM" }, end_time: { type: "string", description: "HH:MM" }, room: { type: "string" }, type: strEnum(["lecture", "lab", "tutorial", "exam"]), group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), notes: { type: "string" } }, ["subject_id", "day_of_week", "start_time", "end_time"]) },
-  { name: "update_schedule_session", description: "تعديل جلسة جدول.", inputSchema: objectSchema({ schedule_id: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string" }, end_time: { type: "string" }, room: { type: "string" }, type: strEnum(["lecture", "lab", "tutorial", "exam"]), group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), notes: { type: "string" }, is_active: { type: "boolean" } }, ["schedule_id"]) },
+  // ─── الجدول الأسبوعي (المجموعات + النوع محاضرة/سكشن + الحضور أونلاين/اوفلاين + القاعة واللينك) ───
+  // القاعدة الزمنية الموحدة: المستخدم يكتب ويرى الوقت بنظام 12 ساعة (مثل "2:30 م") والتحويل تلقائي.
+  { name: "list_schedule", description: "عرض الجدول الأسبوعي مع المواد — كل جلسة تشمل time_display بنظام 12 ساعة (مثل 2:30 م) وتسميات عربية للنوع والحضور.", inputSchema: objectSchema({ day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, group: strEnum(["أ", "ب", "ج", "د", "all"]), type: SCHED_TYPE_DESC, lecture_type: SCHED_MODE_DESC, active_only: { type: "boolean", default: true } }) },
+  { name: "create_schedule_session", description: "إضافة جلسة للجدول — النوع (محاضرة/سكشن/معمل/امتحان/أي) والحضور (أونلاين/اوفلاين) بالعربي أو إنجليزي + القاعة (العنوان) أو رابط الحصة (link).", inputSchema: objectSchema({ subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: "القاعة/العنوان للحصص الحضورية مثل: قاعة 101" }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" } }, ["subject_id", "day_of_week", "start_time", "end_time"]) },
+  { name: "update_schedule_session", description: "تعديل جلسة جدول — نفس حقول الإضافة + إلغاء التفعيل. يمكن تحديث اللينك أو القاعة أو الوقت (12 ساعة مقبولة).", inputSchema: objectSchema({ schedule_id: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: "القاعة/العنوان" }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" }, is_active: { type: "boolean" } }, ["schedule_id"]) },
   { name: "delete_schedule_session", description: "حذف جلسة من الجدول.", inputSchema: objectSchema({ schedule_id: { type: "string" } }, ["schedule_id"]) },
-  { name: "get_week_schedule", description: "عرض الجدول الأسبوعي كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت داخل كل يوم (الأداة الأفضل لمشاهدة الجدول كاملاً).", inputSchema: objectSchema({ group: strEnum(["أ", "ب", "ج", "د", "all"]) }) },
+  { name: "get_week_schedule", description: "عرض الجدول الأسبوعي كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت داخل كل يوم، والأوقات معروضة بنظام 12 ساعة (مثل 2:30 م).", inputSchema: objectSchema({ group: strEnum(["أ", "ب", "ج", "د", "all"]) }) },
   { name: "upsert_subject_by_name", description: "إضافة مادة جديدة بالاسم مباشرة (بدون UUID) — لو فيه مادة بنفس الاسم يرجعها كما هي بدون تكرار.", inputSchema: objectSchema({ name: { type: "string" }, code: { type: "string" }, instructor: { type: "string" }, color: { type: "string", description: "hex مثل #3b82f6" }, icon: { type: "string" }, semester: { type: "string" }, credits: { type: "integer" } }, ["name"]) },
-  { name: "set_schedule_session", description: "إضافة جلسة للجدول بالاسم مباشرة — لو المادة غير موجودة يتم إنشاؤها تلقائياً (لا حاجة لمعرفة subject_id). مثال: محاضرة قواعد بيانات يوم الإثنين 10:00.", inputSchema: objectSchema({ subject_name: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, start_time: { type: "string", description: "HH:MM" }, end_time: { type: "string", description: "HH:MM" }, room: { type: "string" }, type: strEnum(["lecture", "lab", "tutorial", "exam"]), group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: strEnum(["university", "online", "hybrid"]), notes: { type: "string" } }, ["day_of_week", "start_time", "end_time"]) },
+  { name: "set_schedule_session", description: "إضافة جلسة للجدول بالاسم مباشرة — لو المادة غير موجودة يتم إنشاؤها تلقائياً (لا حاجة لمعرفة subject_id). مثال: محاضرة قواعد بيانات يوم الإثنين 10:00 ص — أو سكشن بنظام أونلاين مع لينك.", inputSchema: objectSchema({ subject_name: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: "القاعة/العنوان" }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" } }, ["day_of_week", "start_time", "end_time"]) },
 
   // ─── المواعيد المهمة ───
   { name: "list_important_dates", description: "عرض المواعيد المهمة (امتحانات، تسليمات، إجازات).", inputSchema: objectSchema({ type: strEnum(["exam", "deadline", "holiday", "event", "registration"]), upcoming_only: { type: "boolean", default: false }, limit: { type: "integer", default: 50 } }) },
@@ -193,6 +209,137 @@ function requireDate(args: any, key: string): Date {
     throw new Error(`صيغة "${key}" غير صالحة. استخدم ISO 8601 مثل: 2026-10-01T23:59:00Z`);
   }
   return d;
+}
+
+// ==========================================
+// توحيد الوقت 12 ساعة + نوع الحصة + نوع الحضور + رابط الحصة
+// (v3.3 — القاعدة: المستخدم يرى 12 ساعة ص/م، القاعدة تخزن HH:MM بنظام 24)
+// ==========================================
+
+/** عرض وقت HH:MM بنظام 12 ساعة عربي: "14:30" → "2:30 م" */
+function to12hArabic(t?: string | null): string {
+  if (!t) return "—";
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return String(t);
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  if (Number.isNaN(h) || h < 0 || h > 23) return String(t);
+  const suffix = h < 12 ? "ص" : "م";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${min} ${suffix}`;
+}
+
+/**
+ * قبول الوقت بأي صيغة (12 أو 24 ساعة، عربي أو إنجليزي) وتوحيده إلى "HH:MM" بنظام 24 للتخزين.
+ * أمثلة مقبولة: "14:30" ، "2:30 م" ، "2:30 PM" ، "10:00 صباحاً" ، "9 ص" ، "2:30:00 مساءً"
+ */
+function normalizeTimeInput(v: unknown, field: string, required = true): string | undefined {
+  if (v === undefined || v === null || String(v).trim() === "") {
+    if (required) throw new Error(`الحقل "${field}" مطلوب بصيغة وقت — مثال: 2:30 م أو 14:30`);
+    return undefined;
+  }
+  const raw = String(v).trim();
+  // رفض التواريخ والمجاميع الطويلة بالخطأ
+  if (/[-/]/.test(raw) || raw.length > 16) {
+    throw new Error(`صيغة "${field}" غير مفهومة: "${raw}" — استخدم 12 ساعة مثل "2:30 م" أو 24 ساعة مثل "14:30"`);
+  }
+  // إزالة كلمات شائعة قد يضيفها الموديل قبل الوقت
+  const cleaned = raw
+    .replace(/(ال)?ساع[ةه]/g, " ")
+    .replace(/^(من|إلى|الى|بين)\s+/g, "")
+    .trim();
+  // استخراج الساعة والدقائق (اختيارية) + كاشف ص/م (عربي أو AM/PM)
+  const m = cleaned.match(/^(\d{1,2})(?:[:٫.](\d{1,2}))?(?::(\d{1,2}))?\s*(صباحا|ص|ظهرا|ظهر|نهار|مساء|م|am|pm|a\.m|p\.m)?\.?/i);
+  if (!m) {
+    throw new Error(`صيغة "${field}" غير مفهومة: "${raw}" — استخدم 12 ساعة مثل "2:30 م" أو 24 ساعة مثل "14:30"`);
+  }
+  let h = parseInt(m[1], 10);
+  const min = String(m[2] ?? "0").padStart(2, "0");
+  const marker = (m[4] || "").toLowerCase().replace(/[.ً]/g, "");
+  const isPm = /^(م|مساء|pm)$/.test(marker);
+  const isAm = /^(ص|صباحا|am)$/.test(marker);
+  const isNoon = /^(ظ|ظهرا|ظهر|نهار)$/.test(marker); // الظهر/النهار: 12 تبقى 12 وما قبلها كما هي
+  if (h < 0 || h > 23 || Number(min) > 59) {
+    throw new Error(`وقت غير صالح في "${field}": "${raw}"`);
+  }
+  if (isPm && h >= 1 && h <= 11) h += 12;          // 2:30 م → 14:30
+  else if (isAm && h === 12) h = 0;                // 12:30 ص → 00:30
+  // ظهراً/نهار: 12:30 ظهراً → 12:30 (الظهر نفسه) و10 نهاراً تبقى 10:00
+  if (h > 23) throw new Error(`وقت غير صالح في "${field}": "${raw}"`);
+  return `${String(h).padStart(2, "0")}:${min}`;
+}
+
+/** توحيد نوع الحصة: يقبل العربي (محاضرة/سكشن/معمل/امتحان/أي) والإنجليزي و section/other. */
+function normalizeScheduleType(v: unknown): string | undefined {
+  if (v === undefined || v === null || String(v).trim() === "") return undefined;
+  const s = String(v).trim().toLowerCase().replace(/[ً]/g, "");
+  const map: Record<string, string> = {
+    "lecture": "lecture", "محاضره": "lecture", "محاضرة": "lecture", "محاضره.": "lecture",
+    "tutorial": "tutorial", "section": "tutorial", "سكشن": "tutorial", "سكسن": "tutorial",
+    "lab": "lab", "معمل": "lab", "لاب": "lab",
+    "exam": "exam", "امتحان": "exam",
+    "other": "other", "any": "other", "اي": "other", "أي": "other", "أي حصة": "other", "اي حصة": "other", "أي حصه": "other", "أخرى": "other", "اخري": "other", "حصة": "other", "حصه": "other",
+  };
+  const mapped = map[s];
+  if (!mapped) {
+    throw new Error(`نوع الحصة غير معروف: "${v}" — المسموح: محاضرة (lecture) / سكشن (section) / معمل (lab) / امتحان (exam) / أي حصة (other)`);
+  }
+  return mapped;
+}
+
+/** توحيد نوع الحضور: أونلاين/اوفلاين/جامعة/مختلط (عربي وإنجليزي) → university/online/hybrid. */
+function normalizeLectureType(v: unknown): string | undefined {
+  if (v === undefined || v === null || String(v).trim() === "") return undefined;
+  const s = String(v).trim().toLowerCase().replace(/[ً]/g, "").replace(/\s+/g, "");
+  const map: Record<string, string> = {
+    "university": "university", "offline": "university", "اوفلاين": "university", "أوفلاين": "university", "اوف لاين": "university", "جامعة": "university", "جامعه": "university",
+    "حضوري": "university", "فيالكلية": "university", "oncampus": "university",
+    "online": "online", "أونلاين": "online", "اونلاين": "online", "اون لاين": "online", "عبرالإنترنت": "online", "عبرانترنت": "online", "remote": "online",
+    "hybrid": "hybrid", "مختلط": "hybrid", "مدمج": "hybrid",
+  };
+  const mapped = map[s];
+  if (!mapped) {
+    throw new Error(`نوع الحضور غير معروف: "${v}" — المسموح: أونلاين (online) / أوفلاين أو جامعة (offline/university) / مختلط (hybrid)`);
+  }
+  return mapped;
+}
+
+/** تطبيق كل توحيدات الجدول على صف قبل الإدخال/التعديل + التحقق من رابط الحصة.
+ *  requireTimes=true في مسارات الإنشاء (start/end إلزاميان)، false في التعديل الجزئي. */
+function normalizeScheduleFields(row: Record<string, any>, opts: { requireTimes?: boolean } = {}): Record<string, any> {
+  const requireTimes = opts.requireTimes ?? false;
+  const out = { ...row };
+  if (out.start_time !== undefined) out.start_time = normalizeTimeInput(out.start_time, "start_time");
+  else if (requireTimes) throw new Error('الحقل "start_time" مطلوب بصيغة وقت — مثال: 2:30 م أو 14:30');
+  if (out.end_time !== undefined) out.end_time = normalizeTimeInput(out.end_time, "end_time");
+  else if (requireTimes) throw new Error('الحقل "end_time" مطلوب بصيغة وقت — مثال: 2:30 م أو 14:30');
+  if (out.type !== undefined) out.type = normalizeScheduleType(out.type);
+  if (out.lecture_type !== undefined) out.lecture_type = normalizeLectureType(out.lecture_type);
+  if (out.link !== undefined && out.link !== null && String(out.link).trim() !== "") {
+    const l = String(out.link).trim();
+    if (!/^https?:\/\/.+/i.test(l)) {
+      throw new Error("link يجب أن يكون رابطاً صالحاً يبدأ بـ http:// أو https:// (رابط Zoom/Meet للحصة الأونلاين)");
+    }
+    out.link = l;
+  } else if (out.link !== undefined) {
+    out.link = null; // نص فارغ → null
+  }
+  // لو المستخدم أدخل وقتاً 12 ساعة في room/location بالخطأ لا نلمسه — حقل حر.
+  return out;
+}
+
+/** إثراء صف جدول للعرض: time_display بنظام 12 ساعة + تسميات عربية للنوع والحضور. */
+function annotateScheduleRow(s: any): any {
+  if (!s || typeof s !== "object") return s;
+  const typeAr: Record<string, string> = { lecture: "محاضرة", tutorial: "سكشن", lab: "معمل", exam: "امتحان", other: "حصة" };
+  const modeAr: Record<string, string> = { university: "أوفلاين (جامعة)", online: "أونلاين", hybrid: "مختلط" };
+  return {
+    ...s,
+    time_display: `${to12hArabic(s.start_time)} - ${to12hArabic(s.end_time)}`,
+    type_ar: typeAr[String(s.type || "").toLowerCase()] || String(s.type || "حصة"),
+    mode_ar: modeAr[String(s.lecture_type || "").toLowerCase()] || String(s.lecture_type || ""),
+  };
 }
 
 function jsonResponse(body: any, status = 200, extraHeaders: Record<string, string> = {}) {
@@ -448,20 +595,33 @@ async function executeTool(name: string, args: any, supabase: any) {
     case "update_subject": { const { subject_id, ...patch } = args || {}; return rowResult(table(supabase, "subjects").update(stripUndefined(patch)).eq("id", subject_id).select().single()); }
     case "delete_subject": return rowResult(table(supabase, "subjects").delete().eq("id", args.subject_id).select().single());
 
-    // ─── Schedule ───
+    // ─── Schedule (توحيد الوقت 12 ساعة + النوع بالعربي + الحضور + اللينك) ───
     case "list_schedule": {
       let q = table(supabase, "schedules").select("*, subjects(*)").order("day_of_week").order("start_time").limit(limit);
       if (Number.isInteger(args?.day_of_week)) q = q.eq("day_of_week", args.day_of_week);
       if (args?.group) q = q.in('"group"', [args.group, "all"]);
-      if (args?.lecture_type) q = q.eq("lecture_type", args.lecture_type);
+      if (args?.type) q = q.eq("type", normalizeScheduleType(args.type));
+      if (args?.lecture_type) q = q.eq("lecture_type", normalizeLectureType(args.lecture_type));
       if (args?.active_only !== false) q = q.eq("is_active", true);
-      return rowResult(q);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data || []).map(annotateScheduleRow);
+      return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
     }
-    case "create_schedule_session": return rowResult(table(supabase, "schedules").insert([stripUndefined(args)]).select("*, subjects(*)").single());
-    case "update_schedule_session": { const { schedule_id, ...patch } = args || {}; return rowResult(table(supabase, "schedules").update(stripUndefined(patch)).eq("id", schedule_id).select("*, subjects(*)").single()); }
+    case "create_schedule_session": {
+      const payload = normalizeScheduleFields(stripUndefined(args), { requireTimes: true });
+      return rowResult(table(supabase, "schedules").insert([payload]).select("*, subjects(*)").single());
+    }
+    case "update_schedule_session": {
+      const { schedule_id, ...patch } = args || {};
+      const clean = normalizeScheduleFields(stripUndefined(patch));
+      // السماح بمسح اللينك بإرسال نص فارغ أو null (stripUndefined يسقط null فيجب التعامل الصريح)
+      if (patch?.link !== undefined) clean.link = normalizeScheduleFields({ link: patch.link }).link ?? null;
+      return rowResult(table(supabase, "schedules").update(clean).eq("id", schedule_id).select("*, subjects(*)").single());
+    }
     case "delete_schedule_session": return rowResult(table(supabase, "schedules").delete().eq("id", args.schedule_id).select().single());
 
-    // ─── المواد والجدول بالاسم مباشرة (v3.2 — بدون الحاجة لـ UUID) ───
+    // ─── المواد والجدول بالاسم مباشرة (v3.3 — بدون الحاجة لـ UUID) ───
     case "get_week_schedule": {
       let q = table(supabase, "schedules")
         .select("*, subjects(name, color)")
@@ -478,12 +638,17 @@ async function executeTool(name: string, args: any, supabase: any) {
         if (!byDay[k]) byDay[k] = [];
         byDay[k].push(s);
       }
-      const summary = Object.keys(byDay).sort().map((d) => ({
+      // ترتيب دفاعي إضافي: الحصص حسب وقت البداية داخل كل يوم
+      Object.values(byDay).forEach((arr) =>
+        arr.sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")))
+      );
+      const summary = Object.keys(byDay).sort((a, b) => Number(a) - Number(b)).map((d) => ({
         day: dayNames[Number(d)],
         sessions_count: byDay[d].length,
-        times: byDay[d].map((x: any) => `${x.start_time?.slice(0, 5)}-${x.end_time?.slice(0, 5)}`),
+        times: byDay[d].map((x: any) => `${to12hArabic(x.start_time)} - ${to12hArabic(x.end_time)}`),
       }));
-      return { content: [{ type: "text", text: JSON.stringify({ total_sessions: (data || []).length, week_summary: summary, schedule: data }, null, 2) }] };
+      const schedule = (data || []).map(annotateScheduleRow);
+      return { content: [{ type: "text", text: JSON.stringify({ total_sessions: (data || []).length, week_summary: summary, schedule }, null, 2) }] };
     }
     case "upsert_subject_by_name": {
       const name = requireStr(args, "name", 150);
@@ -514,12 +679,10 @@ async function executeTool(name: string, args: any, supabase: any) {
         }
       }
       const { subject_name, subject_id, ...rest } = args || {};
-      const row = stripUndefined({ ...rest, subject_id: subjectId });
+      // توحيد كل الحقول: الوقت (12/24 ساعة) + النوع (محاضرة/سكشن/أي) + الحضور (أونلاين/اوفلاين) + اللينك
+      const row = normalizeScheduleFields(stripUndefined({ ...rest, subject_id: subjectId }), { requireTimes: true });
       if (!Number.isInteger(row.day_of_week) || row.day_of_week < 0 || row.day_of_week > 6) {
         throw new Error("day_of_week مطلوب ويجب أن يكون بين 0 (الأحد) و 6 (السبت)");
-      }
-      if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(String(row.start_time || "")) || !/^\d{1,2}:\d{2}(:\d{2})?$/.test(String(row.end_time || ""))) {
-        throw new Error("start_time و end_time مطلوبان بصيغة HH:MM (مثل 09:00 و 11:00)");
       }
       const result = await table(supabase, "schedules").insert([row]).select("*, subjects(*)").single();
       if (result.error) throw result.error;

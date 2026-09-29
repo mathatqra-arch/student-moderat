@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { formatTime12, sessionTypeLabel, sessionTypeBg, isSessionOnline } from "@/lib/format";
 
 const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 // Groups removed
@@ -24,9 +25,10 @@ const TYPES = [
   { value: "exam", label: "امتحان", icon: Calendar, color: "bg-coral" },
 ];
 const MODES = [
-  { value: "university", label: "في الكلية", icon: MapPin, color: "bg-yellow" },
+  { value: "university", label: "أوفلاين (كلية)", icon: MapPin, color: "bg-yellow" },
   { value: "online", label: "أونلاين", icon: Video, color: "bg-green" },
 ];
+const HYBRID_FALLBACK = { value: "hybrid", label: "مختلط", icon: Video, color: "bg-teal" };
 
 export default function ScheduleManager() {
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -40,6 +42,7 @@ export default function ScheduleManager() {
   const [newStart, setNewStart] = useState("09:00");
   const [newEnd, setNewEnd] = useState("11:00");
   const [newRoom, setNewRoom] = useState("");
+  const [newLink, setNewLink] = useState("");
   const [newType, setNewType] = useState("lecture");
   
   const [newMode, setNewMode] = useState("university");
@@ -73,18 +76,24 @@ export default function ScheduleManager() {
     if (!newSubject) return;
     setAdding(true);
     const supabase = createClient();
+    const trimmedLink = newLink.trim();
+    const isOnlineMode = newMode === "online";
+    // اللينك لازم يبدأ بـ https:// — والعنوان حقل حر (قاعة/مبنى)
+    const link = trimmedLink.startsWith("http") ? trimmedLink : null;
     await supabase.from("schedules").insert([{
       subject_id: newSubject,
       day_of_week: newDay,
       start_time: newStart,
       end_time: newEnd,
       room: newRoom || null,
+      link,
       type: newType,
       lecture_type: newMode,
-      location: newMode === "online" ? (newRoom.startsWith("http") ? newRoom : "أونلاين") : (newRoom || "الكلية"),
+      location: isOnlineMode ? (newRoom || "أونلاين") : (newRoom || "الكلية"),
       is_active: true,
     }]);
     setNewRoom("");
+    setNewLink("");
     setAdding(false);
     fetchData();
   };
@@ -172,15 +181,17 @@ export default function ScheduleManager() {
                 </div>
               </div>
 
-              {/* Row 2: Time */}
+              {/* Row 2: Time — الإدخال من المتصفح + معاينة فورية بنظام 12 ساعة */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-ink mb-1 block">من</label>
                   <input type="time" value={newStart} onChange={(e) => setNewStart(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm" />
+                  <p className="text-2xs text-gray font-bold mt-1">يعادل: {formatTime12(newStart)}</p>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-ink mb-1 block">إلى</label>
                   <input type="time" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm" />
+                  <p className="text-2xs text-gray font-bold mt-1">يعادل: {formatTime12(newEnd)}</p>
                 </div>
               </div>
 
@@ -226,19 +237,31 @@ export default function ScheduleManager() {
                 </div>
               </div>
 
-              {/* Row 4: Room */}
-              <div className="grid grid-cols-1 gap-3">
+              {/* Row 4: العنوان (الحضوري) + اللينك (الأونلاين) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-ink mb-1 block">القاعة / المكان</label>
+                  <label className="text-xs font-bold text-ink mb-1 block">العنوان / القاعة {newMode === "online" ? "(اختياري)" : ""}</label>
                   <input
                     type="text"
                     value={newRoom}
                     onChange={(e) => setNewRoom(e.target.value)}
-                    placeholder={newMode === "online" ? "رابط المحاضرة (https://...)" : "قاعة 101"}
+                    placeholder={newMode === "online" ? "مثال: أونلاين عبر Teams" : "قاعة 101"}
                     className="brutal-input w-full px-3 py-2.5 text-sm"
-                    disabled={false}
                   />
                 </div>
+                {newMode === "online" && (
+                  <div>
+                    <label className="text-xs font-bold text-ink mb-1 block">رابط الحصة (اللينك)</label>
+                    <input
+                      type="url"
+                      value={newLink}
+                      onChange={(e) => setNewLink(e.target.value)}
+                      placeholder="https://zoom.us/j/... أو https://meet.google.com/..."
+                      dir="ltr"
+                      className="brutal-input w-full px-3 py-2.5 text-sm text-left font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               <button type="submit" disabled={adding} className="brutal-btn w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50">
@@ -281,21 +304,22 @@ export default function ScheduleManager() {
                       {sessions.map((s) => {
                         const subject = s.subjects;
                         const color = subject?.color || "#5C95FF";
-                        const typeInfo = TYPES.find((t) => t.value === s.type) || TYPES[0];
-                        const modeInfo = MODES.find((m) => m.value === s.lecture_type) || MODES[0];
-                        const TypeIcon = typeInfo.icon;
+                        const typeInfo = { label: sessionTypeLabel(s.type), color: sessionTypeBg(s.type) };
+                        const modeInfo = MODES.find((m) => m.value === s.lecture_type) || (s.lecture_type === "hybrid" ? HYBRID_FALLBACK : MODES[0]);
+                        const TypeIcon = typeInfo.label === "محاضرة" ? BookOpen : typeInfo.label === "امتحان" ? Calendar : Users;
                         const ModeIcon = modeInfo.icon;
-                        const isOnline = s.lecture_type === "online" || (s.location || "").toLowerCase().includes("online") || (s.location || "").includes("أونلاين");
+                        const isOnline = isSessionOnline(s);
+                        const sessionLink = typeof s.link === "string" && s.link.startsWith("http") ? s.link : "";
 
                         return (
                           <div key={s.id} className="brutal-card-flat p-3 flex items-center gap-3">
                             {/* Color bar */}
                             <div className="w-1.5 h-12 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
 
-                            {/* Time */}
-                            <div className="text-center flex-shrink-0 min-w-[52px]">
-                              <p className="text-xs font-mono font-bold text-ink">{s.start_time?.slice(0, 5)}</p>
-                              <p className="text-2xs text-gray">{s.end_time?.slice(0, 5)}</p>
+                            {/* Time — بنظام 12 ساعة (ص/م) */}
+                            <div className="text-center flex-shrink-0">
+                              <p className="text-xs font-bold text-ink whitespace-nowrap">{formatTime12(s.start_time)}</p>
+                              <p className="text-2xs text-gray whitespace-nowrap">{formatTime12(s.end_time)}</p>
                             </div>
 
                             {/* Subject + badges */}
@@ -313,12 +337,25 @@ export default function ScheduleManager() {
                                   {modeInfo.label}
                                 </span>
 
-                                {/* Room */}
+                                {/* Room (العنوان) */}
                                 {s.room && !isOnline && (
                                   <span className="flex items-center gap-0.5 text-2xs font-bold text-gray">
                                     <MapPin className="w-2.5 h-2.5" />
                                     {s.room}
                                   </span>
+                                )}
+
+                                {/* Link (اللينك) */}
+                                {sessionLink && (
+                                  <a
+                                    href={sessionLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-0.5 text-2xs font-bold text-ink underline decoration-2 underline-offset-2 hover:opacity-70"
+                                  >
+                                    <Video className="w-2.5 h-2.5" />
+                                    انضم للحصة
+                                  </a>
                                 )}
                               </div>
                             </div>

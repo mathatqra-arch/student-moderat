@@ -22,6 +22,15 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PWAPrompts } from "@/components/ui/pwa/Prompts";
+import {
+  formatTime12,
+  formatTimeOfDay12,
+  hasTimeComponent,
+  sessionTypeLabel,
+  sessionTypeBg,
+  isSessionOnline,
+  sessionOnlineUrl,
+} from "@/lib/format";
 
 type Tab = "home" | "schedule" | "tasks" | "inquiry" | "links";
 
@@ -368,26 +377,16 @@ function SessionCard({ session }: { session: any }) {
   const subject = session.subjects;
   const color = subject?.color || "#FFD54F";
 
-  const getTypeInfo = (type: string) => {
-    switch (type) {
-      case "lecture": return { label: "محاضرة", icon: BookOpen, bg: "bg-blue" };
-      case "lab": return { label: "معمل", icon: Users, bg: "bg-purple-soft" };
-      case "tutorial": return { label: "سكشن", icon: Users, bg: "bg-teal" };
-      case "exam": return { label: "امتحان", icon: AlertCircle, bg: "bg-coral" };
-      default: return { label: type, icon: BookOpen, bg: "bg-yellow" };
-    }
-  };
+  // تسميات موحدة (تدعم محاضرة/سكشن/معمل/امتحان/أي حصة)
+  const typeInfo = { label: sessionTypeLabel(session.type), bg: sessionTypeBg(session.type) };
+  const TypeIcon = BookOpen;
 
-  const typeInfo = getTypeInfo(session.type);
-  const TypeIcon = typeInfo.icon;
-
-  const loc = (session.location || session.room || "").toLowerCase();
-  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين") || session.lecture_type === "online";
+  const isOnline = isSessionOnline(session);
   const LocIcon = isOnline ? Video : MapPin;
-  
-  // لو الجلسة أونلاين ولها رابط (في room أو location أو notes)
-  const onlineUrl = isOnline ? (session.location || session.room || session.notes || "") : "";
-  const hasOnlineLink = isOnline && (onlineUrl.startsWith("http") || onlineUrl.startsWith("https"));
+
+  // رابط الحصة الأونلاين (من عمود link أو الحقول القديمة)
+  const onlineUrl = sessionOnlineUrl(session);
+  const hasOnlineLink = isOnline && onlineUrl.startsWith("http");
   
   // لو فيه رابط، نخلي البطاقة clickable
   const CardWrapper = hasOnlineLink ? "a" : "div";
@@ -400,9 +399,10 @@ function SessionCard({ session }: { session: any }) {
   return (
     <CardWrapper {...(cardProps as any)} className={`brutal-card p-3 flex items-center gap-3 ${hasOnlineLink ? "cursor-pointer hover:translate-x-[-2px] hover:translate-y-[-2px]" : ""}`}>
       <div className="w-1.5 h-14 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-      <div className="text-center flex-shrink-0 min-w-[56px]">
-        <p className="text-xs font-mono font-bold text-ink">{session.start_time?.slice(0, 5)}</p>
-        <p className="text-2xs text-gray font-bold">{session.end_time?.slice(0, 5)}</p>
+      {/* الوقت بنظام 12 ساعة (ص/م) */}
+      <div className="text-center flex-shrink-0 min-w-[64px]">
+        <p className="text-xs font-bold text-ink whitespace-nowrap">{formatTime12(session.start_time)}</p>
+        <p className="text-2xs text-gray font-bold whitespace-nowrap">{formatTime12(session.end_time)}</p>
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm truncate text-ink">{subject?.name || "—"}</p>
@@ -433,21 +433,18 @@ function SessionCard({ session }: { session: any }) {
 function GridSessionCard({ session }: { session: any }) {
   const subject = session.subjects;
   const color = subject?.color || "#FFD54F";
-  const loc = (session.location || session.room || "").toLowerCase();
-  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين") || session.lecture_type === "online";
-  const onlineUrl = isOnline ? (session.location || session.room || session.notes || "") : "";
-  const hasOnlineLink = isOnline && (onlineUrl.startsWith("http") || onlineUrl.startsWith("https"));
+  const isOnline = isSessionOnline(session);
+  const onlineUrl = sessionOnlineUrl(session);
+  const hasOnlineLink = isOnline && onlineUrl.startsWith("http");
   const CardWrapper = hasOnlineLink ? "a" : "div";
   const cardProps = hasOnlineLink ? { href: onlineUrl, target: "_blank", rel: "noopener noreferrer" } : {};
 
   return (
     <CardWrapper {...(cardProps as any)} className={`p-2 brutal-card-flat rounded-md text-2xs space-y-1 ${hasOnlineLink ? "cursor-pointer hover:shadow-brutal-sm" : ""}`} style={{ borderLeft: `4px solid ${color}` }}>
       <p className="font-bold truncate text-ink">{subject?.name || "—"}</p>
-      <p className="font-mono text-gray font-bold">{session.start_time?.slice(0, 5)}</p>
+      <p className="text-gray font-bold">{formatTime12(session.start_time)}</p>
       <div className="flex items-center gap-1 flex-wrap">
-        <span className="brutal-badge bg-cream-dark">
-          {session.type === "lecture" ? "محاضرة" : session.type === "lab" ? "معمل" : session.type === "tutorial" ? "سكشن" : session.type}
-        </span>
+        <span className="brutal-badge bg-cream-dark">{sessionTypeLabel(session.type)}</span>
         {isOnline && <span className="brutal-badge bg-green"><Video className="w-2.5 h-2.5" />أونلاين</span>}
         {hasOnlineLink && <span className="brutal-badge bg-teal"><ExternalLink className="w-2.5 h-2.5" />انضم</span>}
       </div>
@@ -648,11 +645,11 @@ function NextSessionCard({ session, when }: { session: any; when: Date }) {
   const color = subject?.color || "#FFD54F";
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const daysUntil = Math.round((startOfDay(when) - startOfDay(new Date())) / 86400000);
-  const loc = (session.location || session.room || "").toLowerCase();
-  const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين") || session.lecture_type === "online";
+  const isOnline = isSessionOnline(session);
 
-  const typeLabel = session.type === "lecture" ? "محاضرة" : session.type === "lab" ? "معمل" : session.type === "tutorial" ? "سكشن" : session.type === "exam" ? "امتحان" : (session.type || "حصة");
-  const typeBg = session.type === "exam" ? "bg-coral" : session.type === "lab" ? "bg-purple-soft" : session.type === "tutorial" ? "bg-teal" : "bg-blue";
+  // تسمية موحدة تشمل section/other
+  const typeLabel = sessionTypeLabel(session.type);
+  const typeBg = sessionTypeBg(session.type);
 
   return (
     <div className="brutal-card p-3 flex items-center gap-3">
@@ -667,7 +664,7 @@ function NextSessionCard({ session, when }: { session: any; when: Date }) {
         </div>
         <h3 className="font-bold text-sm truncate text-ink mt-1">{subject?.name || "—"}</h3>
         <p className="text-2xs text-gray font-bold">
-          {DAYS[session.day_of_week]} · {when.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })} · {session.start_time?.slice(0, 5)}
+          {DAYS[session.day_of_week]} · {when.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })} · {formatTime12(session.start_time)}
           {isOnline ? " · أونلاين" : session.room ? ` · ${session.room}` : ""}
         </p>
       </div>
@@ -690,6 +687,8 @@ function DateCard({ date }: { date: any }) {
   };
   const dateObj = new Date(date.date);
   const daysUntil = Math.ceil((dateObj.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  // الوقت بنظام 12 ساعة — يظهر فقط للمواعيد ذات ساعة محددة (غير منتصف الليل)
+  const timePart = hasTimeComponent(dateObj) ? ` · ${formatTimeOfDay12(dateObj)}` : "";
   return (
     <div className="brutal-card p-3 flex items-center gap-3">
       <div className={`w-10 h-10 rounded-lg border-2 border-ink ${getBg(date.type)} flex items-center justify-center flex-shrink-0`}>
@@ -697,7 +696,7 @@ function DateCard({ date }: { date: any }) {
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-bold text-sm truncate text-ink">{date.title}</h3>
-        <p className="text-2xs text-gray font-bold">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</p>
+        <p className="text-2xs text-gray font-bold">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}{timePart}</p>
       </div>
       {daysUntil <= 7 && daysUntil >= 0 && (
         <span className="brutal-badge bg-yellow text-ink">
@@ -725,7 +724,7 @@ function TaskCard({ task }: { task: any }) {
       {task.description && <p className="text-xs text-ink-light leading-relaxed">{task.description}</p>}
       <div className="flex items-center gap-1 text-2xs text-gray font-bold pt-1">
         <Clock className="w-3 h-3" />
-        <span>التسليم: {deadline.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</span>
+        <span>التسليم: {deadline.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })} · {formatTimeOfDay12(deadline)}</span>
       </div>
     </div>
   );

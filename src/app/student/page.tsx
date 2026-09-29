@@ -26,7 +26,7 @@ import { PWAPrompts } from "@/components/ui/pwa/Prompts";
 type Tab = "home" | "schedule" | "tasks" | "inquiry" | "links";
 
 const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-const GROUPS = ["الكل", "أ", "ب", "ج", "د"];
+// Groups removed - all sessions shown together
 
 export default function StudentPage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
@@ -156,7 +156,7 @@ function HomeTab() {
       const supabase = createClient();
       const [annRes, datesRes] = await Promise.all([
         supabase.from("announcements").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("important_dates").select("*, subjects(*)").gte("date", new Date().toISOString()).order("date", { ascending: true }).limit(5),
+        supabase.from("important_dates").select("*, subjects(*)").gte("date", new Date().toISOString()).order("date", { ascending: true }).limit(10),
       ]);
       setAnnouncements(annRes.data || []);
       setUpcomingDates(datesRes.data || []);
@@ -227,7 +227,7 @@ function HomeTab() {
 function ScheduleTab() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedGroup, setSelectedGroup] = useState("الكل");
+  
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
   useEffect(() => {
@@ -240,11 +240,7 @@ function ScheduleTab() {
     fetchData();
   }, []);
 
-  const filtered = schedules.filter((s) => {
-    if (selectedGroup === "الكل") return true;
-    if (!s.group || s.group === "all") return true;
-    return s.group === selectedGroup;
-  });
+  const filtered = schedules;
 
   const grouped: Record<number, any[]> = {};
   filtered.forEach((s) => {
@@ -265,20 +261,6 @@ function ScheduleTab() {
           <button onClick={() => setViewMode("list")} className={`px-3 py-1.5 rounded text-xs font-bold transition ${viewMode === "list" ? "bg-ink text-cream-light" : "text-gray"}`}>قائمة</button>
           <button onClick={() => setViewMode("grid")} className={`px-3 py-1.5 rounded text-xs font-bold transition ${viewMode === "grid" ? "bg-ink text-cream-light" : "text-gray"}`}>شبكة</button>
         </div>
-      </div>
-
-      {/* Group filter chips */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-bold text-gray">المجموعة:</span>
-        {GROUPS.map((g) => (
-          <button
-            key={g}
-            onClick={() => setSelectedGroup(g)}
-            className={`brutal-chip ${selectedGroup === g ? "active" : ""}`}
-          >
-            {g}
-          </button>
-        ))}
       </div>
 
       {filtered.length === 0 ? (
@@ -345,7 +327,7 @@ function SessionCard({ session }: { session: any }) {
       <div className="w-1.5 h-14 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
       <div className="text-center flex-shrink-0 min-w-[56px]">
         <p className="text-xs font-mono font-bold">{session.start_time?.slice(0, 5)}</p>
-        <p className="text-2xs text-gray">{session.end_time?.slice(0, 5)}</p>
+        <p className="text-2xs text-gray font-bold">{session.end_time?.slice(0, 5)}</p>
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm truncate">{subject?.name || "—"}</p>
@@ -570,7 +552,7 @@ function AnnouncementCard({ announcement }: { announcement: any }) {
           <span className={`brutal-badge ${getBadgeStyle(announcement.category)}`}>{announcement.category}</span>
           {announcement.is_pinned && <Pin className="w-3.5 h-3.5 fill-current text-ink" />}
         </div>
-        <span className="text-2xs text-gray-light font-bold">{new Date(announcement.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}</span>
+        <span className="text-2xs text-gray font-bold">{new Date(announcement.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}</span>
       </div>
       <h3 className="font-extrabold text-sm leading-snug text-ink">{announcement.title}</h3>
       <p className="text-xs text-ink-light leading-relaxed whitespace-pre-line">{announcement.content}</p>
@@ -595,7 +577,7 @@ function DateCard({ date }: { date: any }) {
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-bold text-sm truncate text-ink">{date.title}</h3>
-        <p className="text-2xs text-gray">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</p>
+        <p className="text-2xs text-gray font-bold">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</p>
       </div>
       {daysUntil <= 7 && daysUntil >= 0 && (
         <span className="brutal-badge bg-yellow text-ink">
@@ -620,7 +602,7 @@ function TaskCard({ task }: { task: any }) {
         </span>
       </div>
       <h3 className="font-extrabold text-sm">{task.title}</h3>
-      {task.description && <p className="text-xs text-gray leading-relaxed">{task.description}</p>}
+      {task.description && <p className="text-xs text-ink-light leading-relaxed">{task.description}</p>}
       <div className="flex items-center gap-1 text-2xs text-gray font-bold pt-1">
         <Clock className="w-3 h-3" />
         <span>التسليم: {deadline.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</span>
@@ -645,7 +627,7 @@ function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
       <div className="w-12 h-12 rounded-full border-2 border-ink bg-cream-dark flex items-center justify-center mx-auto">
         <Icon className="w-6 h-6 text-gray" />
       </div>
-      <p className="text-xs text-gray font-bold">{message}</p>
+      <p className="text-xs text-ink-soft font-bold">{message}</p>
     </div>
   );
 }

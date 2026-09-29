@@ -16,7 +16,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 
 const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-const GROUPS = ["أ", "ب", "ج", "د"];
+// Groups removed
 const TYPES = [
   { value: "lecture", label: "محاضرة", icon: BookOpen, color: "bg-blue" },
   { value: "tutorial", label: "سكشن", icon: Users, color: "bg-teal" },
@@ -41,7 +41,7 @@ export default function ScheduleManager() {
   const [newEnd, setNewEnd] = useState("11:00");
   const [newRoom, setNewRoom] = useState("");
   const [newType, setNewType] = useState("lecture");
-  const [newGroup, setNewGroup] = useState("أ");
+  
   const [newMode, setNewMode] = useState("university");
   const [adding, setAdding] = useState(false);
 
@@ -80,7 +80,6 @@ export default function ScheduleManager() {
       end_time: newEnd,
       room: newRoom || null,
       type: newType,
-      group: newGroup,
       lecture_type: newMode,
       location: newMode === "online" ? "أونلاين" : (newRoom || "الكلية"),
       is_active: true,
@@ -227,23 +226,8 @@ export default function ScheduleManager() {
                 </div>
               </div>
 
-              {/* Row 4: Group + Room */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-ink mb-1 block">المجموعة</label>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {GROUPS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setNewGroup(g)}
-                        className={`py-2.5 rounded-md border-2 text-sm font-extrabold transition ${newGroup === g ? "border-ink bg-yellow shadow-brutal-sm" : "border-ink bg-cream-light text-gray"}`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {/* Row 4: Room */}
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className="text-xs font-bold text-ink mb-1 block">القاعة / المكان</label>
                   <input
@@ -328,10 +312,7 @@ export default function ScheduleManager() {
                                   <ModeIcon className="w-2.5 h-2.5" />
                                   {modeInfo.label}
                                 </span>
-                                {/* Group badge */}
-                                <span className="brutal-badge bg-cream-dark text-ink">
-                                  مجموعة {s.group || "أ"}
-                                </span>
+
                                 {/* Room */}
                                 {s.room && !isOnline && (
                                   <span className="flex items-center gap-0.5 text-2xs font-bold text-gray">

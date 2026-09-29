@@ -429,6 +429,20 @@
   .shadow-brutal-md { box-shadow: var(--shadow-md); }
   .shadow-brutal-lg { box-shadow: var(--shadow-lg); }
 
+  /* Fix: text on yellow badges must be dark */
+  .bg-yellow { color: var(--ink) !important; }
+  .bg-yellow * { color: var(--ink) !important; }
+  .bg-green { color: var(--ink) !important; }
+  .bg-green * { color: var(--ink) !important; }
+  .bg-teal { color: var(--ink) !important; }
+  .bg-teal * { color: var(--ink) !important; }
+  .bg-coral { color: var(--cream-light) !important; }
+  .bg-coral * { color: var(--cream-light) !important; }
+  .bg-blue { color: var(--cream-light) !important; }
+  .bg-blue * { color: var(--cream-light) !important; }
+  .bg-purple-soft { color: var(--cream-light) !important; }
+  .bg-purple-soft * { color: var(--cream-light) !important; }
+
   /* Theme toggle — hidden in brutalist (cream only) */
   .theme-toggle-hidden { display: none !important; }
 

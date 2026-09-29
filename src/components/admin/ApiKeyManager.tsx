@@ -126,7 +126,7 @@ export default function ApiKeyManager() {
           </div>
         </div>
 
-        <form onSubmit={handleGenerateKey} className="flex flex-col sm:flex-row gap-3 items-end">
+        <form onSubmit={handleGenerateKey} className="flex flex-col gap-3">
           <div className="flex-1 w-full">
             <label className="text-xs font-bold text-ink mb-1.5 block">اسم المفتاح *</label>
             <input
@@ -176,7 +176,7 @@ export default function ApiKeyManager() {
             {keys.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-3.5 brutal-card-flat gap-3"
+                className="flex items-center justify-between p-3 brutal-card-flat gap-2 flex-wrap sm:flex-nowrap"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div className="w-9 h-9 rounded-lg border-2 border-ink bg-purple-soft flex items-center justify-center flex-shrink-0">
@@ -221,7 +221,7 @@ export default function ApiKeyManager() {
         <p className="text-xs text-ink-soft leading-relaxed">
           انسخ هذا الرابط وأضفه في ChatGPT → Settings → Connectors:
         </p>
-        <div className="brutal-card-flat p-3 flex items-center justify-between gap-2 text-xs" style={{ background: "var(--cream-white)" }}>
+        <div className="brutal-card-flat p-3 flex items-center gap-2 text-xs flex-wrap sm:flex-nowrap" style={{ background: "var(--cream-white)" }}>
           <code className="font-mono text-ink-soft truncate text-2xs">
             https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
           </code>

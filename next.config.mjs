@@ -28,15 +28,15 @@ const nextConfig = {
             value: "on",
           },
           {
-            // CSP متوازنة: تسمح بسكربتات Next.js الداخلية وتمنع أي مصدر خارجي
+            // CSP متوازنة: تسمح بسكربتات Next.js الداخلية + Google Fonts (Cairo) وتمنع أي مصدر خارجي آخر
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
               // Next.js يحتاج inline scripts للـ hydration و unsafe-eval في dev
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-              "style-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https:",
-              "font-src 'self' data:",
+              "font-src 'self' data: https://fonts.gstatic.com",
               // Supabase (قاعدة البيانات + المصادقة) + أي APIs داخلية
               `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL || "https://*.supabase.co"} wss://*.supabase.co`,
               "frame-ancestors 'none'",

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { missingServerConfig, configErrorResponse } from "@/lib/server-config";
 
 // ==========================================
 // Admin Password Set/Change Endpoint
@@ -51,6 +52,11 @@ async function getAuthenticatedUser() {
 }
 
 export async function POST(request: Request) {
+  // فحص إعدادات السيرفر — 503 واضحة بدل 500 غامضة
+  if (missingServerConfig()) {
+    return configErrorResponse("admin/password");
+  }
+
   try {
     // Rate Limit — 5 محاولات تغيير كل 10 دقائق لكل IP
     const limited = await enforceRateLimit(request, RATE_LIMITS.passwordChange);

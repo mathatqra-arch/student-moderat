@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { missingServerConfig, configErrorResponse } from "@/lib/server-config";
 
 // ==========================================
 // Admin Login Endpoint — Phone + Password
@@ -18,6 +19,36 @@ const SUPABASE_SERVICE_ROLE_KEY =
 
 // رسالة موحدة — لا نكشف هل الرقم موجود أم كلمة المرور خاطئة
 const GENERIC_LOGIN_ERROR = "بيانات الدخول غير صحيحة";
+
+// ==========================================
+// كاش البحث phone → email (5 دقائق) — لتخفيف listUsers(1000) المكلف
+// تحت حمل 1000+ مستخدم، محاولات الدخول المتكررة لا تضرب Admin API كل مرة
+// ==========================================
+const USER_LOOKUP_CACHE = new Map<
+  string,
+  { email: string; userId: string; needsPasswordChange: boolean; expiresAt: number }
+>();
+const USER_CACHE_TTL_MS = 5 * 60 * 1000;
+const USER_CACHE_MAX = 200;
+
+function cacheUserLookup(phone: string, entry: { email: string; userId: string; needsPasswordChange: boolean }) {
+  if (USER_CACHE_MAX && USER_LOOKUP_CACHE.size >= USER_CACHE_MAX) {
+    // أحذف الأقدم
+    const oldest = USER_LOOKUP_CACHE.keys().next().value;
+    if (oldest) USER_LOOKUP_CACHE.delete(oldest);
+  }
+  USER_LOOKUP_CACHE.set(phone, { ...entry, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+}
+
+function getCachedUserLookup(phone: string) {
+  const hit = USER_LOOKUP_CACHE.get(phone);
+  if (!hit) return null;
+  if (hit.expiresAt < Date.now()) {
+    USER_LOOKUP_CACHE.delete(phone);
+    return null;
+  }
+  return hit;
+}
 
 function getAdminClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
@@ -49,6 +80,11 @@ interface LoginResponse {
 }
 
 export async function POST(request: Request): Promise<NextResponse<LoginResponse>> {
+  // -1. فحص إعدادات السيرفر — 503 واضحة بدل 500 غامضة
+  if (missingServerConfig()) {
+    return configErrorResponse("admin/login") as NextResponse<LoginResponse>;
+  }
+
   // 0. Rate Limit — 10 محاولات كل 5 دقائق لكل IP
   const limited = await enforceRateLimit(request, RATE_LIMITS.login);
   if (limited) return limited as NextResponse<LoginResponse>;
@@ -68,33 +104,55 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     const normalizedPhone = normalizeEgyptianPhone(phoneInput);
     const adminClient = getAdminClient();
 
-    // 1. البحث عن المستخدم في auth.users عبر Admin API
-    const { data: usersData, error: listError } = await adminClient.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
+    // 1. البحث عن المستخدم — من الكاش أولاً ثم Admin API
+    let targetEmail: string | undefined;
+    let targetId: string | undefined;
+    let needsPasswordChange = false;
 
-    if (listError) {
-      console.error("Admin user search failed:", listError);
-      return NextResponse.json(
-        { ok: false, error: "تعذّر التحقق من بيانات الدخول" },
-        { status: 500 }
-      );
+    const cached = getCachedUserLookup(normalizedPhone);
+    if (cached) {
+      targetEmail = cached.email;
+      targetId = cached.userId;
+      needsPasswordChange = cached.needsPasswordChange;
+    } else {
+      const { data: usersData, error: listError } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+
+      if (listError) {
+        console.error("Admin user search failed:", listError);
+        return NextResponse.json(
+          { ok: false, error: "تعذّر التحقق من بيانات الدخول" },
+          { status: 500 }
+        );
+      }
+
+      const targetUser = usersData.users.find((u) => {
+        if (!u.phone) return false;
+        const userPhone = u.phone.replace(/^\+/, "");
+        const inputPhone = normalizedPhone.replace(/^\+/, "");
+        return (
+          u.phone === normalizedPhone ||
+          userPhone === inputPhone ||
+          userPhone === inputPhone.replace(/^\+2/, "")
+        );
+      });
+
+      if (targetUser?.email) {
+        targetEmail = targetUser.email;
+        targetId = targetUser.id;
+        needsPasswordChange = targetUser.user_metadata?.needs_password_change === true;
+        cacheUserLookup(normalizedPhone, {
+          email: targetEmail,
+          userId: targetId,
+          needsPasswordChange,
+        });
+      }
     }
 
-    const targetUser = usersData.users.find((u) => {
-      if (!u.phone) return false;
-      const userPhone = u.phone.replace(/^\+/, "");
-      const inputPhone = normalizedPhone.replace(/^\+/, "");
-      return (
-        u.phone === normalizedPhone ||
-        userPhone === inputPhone ||
-        userPhone === inputPhone.replace(/^\+2/, "")
-      );
-    });
-
     // رسالة موحدة — لا نكشف وجود الحساب أم لا
-    if (!targetUser || !targetUser.email) {
+    if (!targetEmail) {
       return NextResponse.json(
         { ok: false, error: GENERIC_LOGIN_ERROR },
         { status: 401 }
@@ -105,7 +163,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     const { data: teamMember, error: teamError } = await adminClient
       .from("team_members")
       .select("id, name, role, permissions")
-      .eq("user_id", targetUser.id)
+      .eq("user_id", targetId)
       .single();
 
     if (teamError || !teamMember) {
@@ -136,7 +194,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
 
     const { data: signInData, error: signInError } =
       await supabase.auth.signInWithPassword({
-        email: targetUser.email,
+        email: targetEmail,
         password,
       });
 
@@ -148,8 +206,6 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     }
 
     // 4. النجاح
-    const needsPasswordChange = targetUser.user_metadata?.needs_password_change === true;
-
     return NextResponse.json({
       ok: true,
       user: {

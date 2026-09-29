@@ -130,14 +130,14 @@ function MobileTabButton({ active, onClick, icon: Icon, label }: { active: boole
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border-2 transition ${
+      className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border-2 transition ${
         active
           ? "border-ink bg-yellow shadow-brutal-sm"
           : "border-transparent text-gray"
       }`}
     >
       <Icon className={`w-5 h-5 ${active ? "scale-110" : ""} transition-transform`} />
-      <span className="text-2xs mt-0.5 font-bold">{label}</span>
+      <span className="text-2xs mt-1 font-bold">{label}</span>
     </button>
   );
 }
@@ -564,16 +564,16 @@ function AnnouncementCard({ announcement }: { announcement: any }) {
     }
   };
   return (
-    <div className={`brutal-card p-4 space-y-2 ${announcement.is_pinned ? "border-blue" : ""}`}>
+    <div className={`brutal-card p-5 space-y-3 ${announcement.is_pinned ? "border-blue" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className={`brutal-badge ${getBadgeStyle(announcement.category)}`}>{announcement.category}</span>
-          {announcement.is_pinned && <Pin className="w-3 h-3 fill-current" />}
+          {announcement.is_pinned && <Pin className="w-3.5 h-3.5 fill-current text-ink" />}
         </div>
-        <span className="text-2xs text-gray font-bold">{new Date(announcement.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}</span>
+        <span className="text-2xs text-gray-light font-bold">{new Date(announcement.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}</span>
       </div>
-      <h3 className="font-extrabold text-sm leading-snug">{announcement.title}</h3>
-      <p className="text-xs text-gray leading-relaxed whitespace-pre-line">{announcement.content}</p>
+      <h3 className="font-extrabold text-sm leading-snug text-ink">{announcement.title}</h3>
+      <p className="text-xs text-ink-light leading-relaxed whitespace-pre-line">{announcement.content}</p>
     </div>
   );
 }
@@ -594,7 +594,7 @@ function DateCard({ date }: { date: any }) {
         <Icon className="w-5 h-5 text-ink" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-bold text-sm truncate">{date.title}</h3>
+        <h3 className="font-bold text-sm truncate text-ink">{date.title}</h3>
         <p className="text-2xs text-gray">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</p>
       </div>
       {daysUntil <= 7 && daysUntil >= 0 && (

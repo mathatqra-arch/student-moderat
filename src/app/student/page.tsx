@@ -21,7 +21,6 @@ import {
   Search,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { PWAPrompts } from "@/components/ui/pwa/Prompts";
 
 type Tab = "home" | "schedule" | "tasks" | "inquiry" | "links";
@@ -33,32 +32,36 @@ export default function StudentPage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
 
   return (
-    <div className="min-h-screen bg-surface-base text-text-primary">
-      <div className="flex">
+    <div className="min-h-screen bg-cream text-ink relative overflow-hidden">
+      {/* Decorative blobs */}
+      <div className="blob-yellow" style={{ top: "-50px", right: "-50px" }} />
+      <div className="blob-coral" style={{ bottom: "10%", left: "5%" }} />
+
+      <div className="flex relative z-10">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex flex-col w-64 min-h-screen sticky top-0 h-screen border-l border-border-default" style={{ background: "var(--color-surface-raised)" }}>
-          <div className="p-6 space-y-6 flex flex-col h-full">
+        <aside className="hidden lg:flex flex-col w-64 min-h-screen sticky top-0 h-screen border-l-2 border-ink bg-cream-light">
+          <div className="p-5 space-y-5 flex flex-col h-full">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center shadow-md shadow-glow">
-                <BookOpen className="w-5 h-5 text-white" />
+              <div className="w-11 h-11 rounded-xl border-2 border-ink bg-yellow shadow-brutal-sm flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-ink" />
               </div>
               <div>
-                <h1 className="font-bold text-base tracking-tight">منصة الدفعة</h1>
-                <p className="text-xs text-text-muted">إدارة أكاديمية</p>
+                <h1 className="font-extrabold text-base tracking-tight">منصة الدفعة</h1>
+                <p className="text-xs text-gray">إدارة أكاديمية</p>
               </div>
             </div>
 
             <nav className="space-y-1 flex-1">
-              <SidebarButton active={activeTab === "home"} onClick={() => setActiveTab("home")} icon={Megaphone} label="الرئيسية" />
-              <SidebarButton active={activeTab === "schedule"} onClick={() => setActiveTab("schedule")} icon={Calendar} label="الجدول الأسبوعي" />
-              <SidebarButton active={activeTab === "tasks"} onClick={() => setActiveTab("tasks")} icon={CheckCircle2} label="التكليفات" />
-              <SidebarButton active={activeTab === "inquiry"} onClick={() => setActiveTab("inquiry")} icon={MessageSquarePlus} label="استفسار" />
-              <SidebarButton active={activeTab === "links"} onClick={() => setActiveTab("links")} icon={Link2} label="روابط سريعة" />
+              <BrutalNavButton active={activeTab === "home"} onClick={() => setActiveTab("home")} icon={Megaphone} label="الرئيسية" />
+              <BrutalNavButton active={activeTab === "schedule"} onClick={() => setActiveTab("schedule")} icon={Calendar} label="الجدول الأسبوعي" />
+              <BrutalNavButton active={activeTab === "tasks"} onClick={() => setActiveTab("tasks")} icon={CheckCircle2} label="التكليفات" />
+              <BrutalNavButton active={activeTab === "inquiry"} onClick={() => setActiveTab("inquiry")} icon={MessageSquarePlus} label="استفسار" />
+              <BrutalNavButton active={activeTab === "links"} onClick={() => setActiveTab("links")} icon={Link2} label="روابط سريعة" />
             </nav>
 
-            <div className="pt-4 border-t border-border-default flex items-center justify-between">
-              <span className="text-xs text-text-muted">v4.0</span>
-              <ThemeToggle />
+            <div className="p-3 brutal-card-flat bg-yellow rounded-lg">
+              <p className="text-xs font-bold">💡 نصيحة اليوم</p>
+              <p className="text-2xs text-gray mt-1">راجع الجدول الأسبوعي قبل كل محاضرة</p>
             </div>
           </div>
         </aside>
@@ -66,15 +69,14 @@ export default function StudentPage() {
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-h-screen">
           {/* Mobile Header */}
-          <header className="lg:hidden sticky top-0 z-sticky glass-panel border-b border-border-default px-4 py-3">
+          <header className="lg:hidden sticky top-0 z-30 bg-cream-light border-b-2 border-ink px-4 py-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg gradient-brand flex items-center justify-center shadow-sm shadow-glow">
-                  <BookOpen className="w-4 h-4 text-white" />
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg border-2 border-ink bg-yellow shadow-brutal-sm flex items-center justify-center">
+                  <BookOpen className="w-4 h-4 text-ink" />
                 </div>
-                <h1 className="font-bold text-sm">منصة الدفعة</h1>
+                <h1 className="font-extrabold text-sm">منصة الدفعة</h1>
               </div>
-              <ThemeToggle />
             </div>
           </header>
 
@@ -94,7 +96,7 @@ export default function StudentPage() {
       </div>
 
       {/* Mobile Bottom Nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-sticky glass-panel border-t border-border-default">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-cream-light border-t-2 border-ink">
         <div className="grid grid-cols-5 gap-1 p-2">
           <MobileTabButton active={activeTab === "home"} onClick={() => setActiveTab("home")} icon={Megaphone} label="الرئيسية" />
           <MobileTabButton active={activeTab === "schedule"} onClick={() => setActiveTab("schedule")} icon={Calendar} label="الجدول" />
@@ -110,35 +112,38 @@ export default function StudentPage() {
 }
 
 // ==========================================
-// Sidebar Button (Desktop)
+// Brutal Nav Button (Sidebar)
 // ==========================================
-function SidebarButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: any; label: string }) {
+function BrutalNavButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: any; label: string }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-md text-sm font-medium transition-all duration-fast ease-standard ${
-        active
-          ? "gradient-brand text-white shadow-sm shadow-glow"
-          : "text-text-secondary hover:text-text-primary hover:bg-surface-overlay"
-      }`}
+      className={`brutal-nav-item ${active ? "active" : ""}`}
     >
       <Icon className="w-4 h-4" />
-      <span>{label}</span>
+      <span className="text-sm">{label}</span>
     </button>
   );
 }
 
 function MobileTabButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: any; label: string }) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-md transition ${active ? "text-brand" : "text-text-muted"}`}>
-      <Icon className={`w-5 h-5 ${active ? "scale-110" : ""} transition-transform duration-fast`} />
-      <span className="text-2xs mt-0.5">{label}</span>
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg border-2 transition ${
+        active
+          ? "border-ink bg-yellow shadow-brutal-sm"
+          : "border-transparent text-gray"
+      }`}
+    >
+      <Icon className={`w-5 h-5 ${active ? "scale-110" : ""} transition-transform`} />
+      <span className="text-2xs mt-0.5 font-bold">{label}</span>
     </button>
   );
 }
 
 // ==========================================
-// Home Tab — Bento grid: announcements large + dates sidebar
+// Home Tab
 // ==========================================
 function HomeTab() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -169,18 +174,18 @@ function HomeTab() {
       {/* Announcements — 2/3 */}
       <div className="lg:col-span-2 space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-heading tracking-tight flex items-center gap-2">
-            <Megaphone className="w-5 h-5 text-brand" />
+          <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+            <Megaphone className="w-5 h-5" />
             الإعلانات
           </h2>
           <div className="relative flex-1 max-w-xs">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="بحث في الإعلانات..."
-              className="input w-full pr-9 pl-3 py-2 text-xs"
+              placeholder="بحث..."
+              className="brutal-search"
             />
           </div>
         </div>
@@ -198,14 +203,14 @@ function HomeTab() {
 
       {/* Upcoming Dates — 1/3 */}
       <div className="space-y-4">
-        <h2 className="text-xl font-heading tracking-tight flex items-center gap-2">
-          <Clock className="w-5 h-5 text-warning" />
+        <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+          <Clock className="w-5 h-5" />
           مواعيد قادمة
         </h2>
         {upcomingDates.length === 0 ? (
           <EmptyState icon={Clock} message="لا توجد مواعيد" />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {upcomingDates.map((date) => (
               <DateCard key={date.id} date={date} />
             ))}
@@ -217,7 +222,7 @@ function HomeTab() {
 }
 
 // ==========================================
-// Schedule Tab — smart schedule with groups + types
+// Schedule Tab
 // ==========================================
 function ScheduleTab() {
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -250,30 +255,26 @@ function ScheduleTab() {
   if (loading) return <LoadingState />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-xl font-heading tracking-tight flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-brand" />
+        <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+          <Calendar className="w-5 h-5" />
           الجدول الأسبوعي
         </h2>
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-surface-inset p-1 rounded-md">
-            <button onClick={() => setViewMode("list")} className={`px-3 py-1.5 rounded text-xs font-medium transition ${viewMode === "list" ? "gradient-brand text-white" : "text-text-muted"}`}>قائمة</button>
-            <button onClick={() => setViewMode("grid")} className={`px-3 py-1.5 rounded text-xs font-medium transition ${viewMode === "grid" ? "gradient-brand text-white" : "text-text-muted"}`}>شبكة</button>
-          </div>
+        <div className="flex gap-1 p-1 brutal-card-flat rounded-lg">
+          <button onClick={() => setViewMode("list")} className={`px-3 py-1.5 rounded text-xs font-bold transition ${viewMode === "list" ? "bg-ink text-cream-light" : "text-gray"}`}>قائمة</button>
+          <button onClick={() => setViewMode("grid")} className={`px-3 py-1.5 rounded text-xs font-bold transition ${viewMode === "grid" ? "bg-ink text-cream-light" : "text-gray"}`}>شبكة</button>
         </div>
       </div>
 
-      {/* Group filter */}
+      {/* Group filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium text-text-muted">المجموعة:</span>
+        <span className="text-xs font-bold text-gray">المجموعة:</span>
         {GROUPS.map((g) => (
           <button
             key={g}
             onClick={() => setSelectedGroup(g)}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition duration-fast ${
-              selectedGroup === g ? "gradient-brand text-white shadow-sm shadow-glow" : "bg-surface-inset text-text-muted hover:text-text-primary"
-            }`}
+            className={`brutal-chip ${selectedGroup === g ? "active" : ""}`}
           >
             {g}
           </button>
@@ -286,8 +287,8 @@ function ScheduleTab() {
         <div className="space-y-5">
           {Object.entries(grouped).map(([day, sessions]) => (
             <div key={day}>
-              <h3 className="text-sm font-heading text-text-secondary mb-2 flex items-center gap-2">
-                <span className="w-1 h-4 rounded-full gradient-brand" />
+              <h3 className="text-sm font-extrabold text-gray mb-2 flex items-center gap-2">
+                <span className="w-1.5 h-4 rounded-full bg-ink" />
                 {DAYS[parseInt(day)]}
               </h3>
               <div className="space-y-2">
@@ -302,7 +303,7 @@ function ScheduleTab() {
         <div className="hidden lg:grid grid-cols-7 gap-2">
           {DAYS.map((day, dayIdx) => (
             <div key={day} className="space-y-2">
-              <h3 className="text-xs font-medium text-center text-text-muted py-1.5 bg-surface-inset rounded-md">{day}</h3>
+              <h3 className="text-xs font-extrabold text-center py-1.5 brutal-card-flat rounded-md bg-cream-dark">{day}</h3>
               {grouped[dayIdx]?.map((s) => (
                 <GridSessionCard key={s.id} session={s} />
               ))}
@@ -319,15 +320,15 @@ function ScheduleTab() {
 // ==========================================
 function SessionCard({ session }: { session: any }) {
   const subject = session.subjects;
-  const color = subject?.color || "#3b82f6";
+  const color = subject?.color || "#FFD54F";
 
   const getTypeInfo = (type: string) => {
     switch (type) {
-      case "lecture": return { label: "محاضرة", icon: BookOpen, gradient: "gradient-brand" };
-      case "lab": return { label: "معمل", icon: Users, gradient: "gradient-purple" };
-      case "tutorial": return { label: "سكشن", icon: Users, gradient: "gradient-emerald" };
-      case "exam": return { label: "امتحان", icon: AlertCircle, gradient: "gradient-rose" };
-      default: return { label: type, icon: BookOpen, gradient: "gradient-brand" };
+      case "lecture": return { label: "محاضرة", icon: BookOpen, bg: "bg-blue" };
+      case "lab": return { label: "معمل", icon: Users, bg: "bg-purple-soft" };
+      case "tutorial": return { label: "سكشن", icon: Users, bg: "bg-teal" };
+      case "exam": return { label: "امتحان", icon: AlertCircle, bg: "bg-coral" };
+      default: return { label: type, icon: BookOpen, bg: "bg-yellow" };
     }
   };
 
@@ -340,24 +341,24 @@ function SessionCard({ session }: { session: any }) {
   const locLabel = isOnline ? "أونلاين" : (session.room || "");
 
   return (
-    <div className="card card-hover p-3 flex items-center gap-3">
-      <div className="w-1 h-14 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+    <div className="brutal-card p-3 flex items-center gap-3">
+      <div className="w-1.5 h-14 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
       <div className="text-center flex-shrink-0 min-w-[56px]">
-        <p className="text-xs font-mono font-medium tabular">{session.start_time?.slice(0, 5)}</p>
-        <p className="text-2xs text-text-muted">{session.end_time?.slice(0, 5)}</p>
+        <p className="text-xs font-mono font-bold">{session.start_time?.slice(0, 5)}</p>
+        <p className="text-2xs text-gray">{session.end_time?.slice(0, 5)}</p>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm truncate">{subject?.name || "—"}</p>
+        <p className="font-bold text-sm truncate">{subject?.name || "—"}</p>
         <div className="flex items-center gap-2 text-2xs mt-0.5">
-          <span className={`px-1.5 py-0.5 rounded font-medium text-white flex items-center gap-1 ${typeInfo.gradient}`}>
+          <span className={`brutal-badge ${typeInfo.bg} text-ink`}>
             <TypeIcon className="w-2.5 h-2.5" />
             {typeInfo.label}
           </span>
           {session.group && session.group !== "all" && (
-            <span className="px-1.5 py-0.5 rounded bg-surface-inset font-medium">مجموعة {session.group}</span>
+            <span className="brutal-badge bg-cream-dark">مجموعة {session.group}</span>
           )}
           {locLabel && (
-            <span className={`flex items-center gap-0.5 ${isOnline ? "text-info" : "text-warning"}`}>
+            <span className={`flex items-center gap-0.5 font-bold ${isOnline ? "text-teal-dark" : "text-gray"}`}>
               <LocIcon className="w-2.5 h-2.5" />
               {locLabel}
             </span>
@@ -369,26 +370,26 @@ function SessionCard({ session }: { session: any }) {
 }
 
 // ==========================================
-// Grid Session Card (Desktop grid view)
+// Grid Session Card
 // ==========================================
 function GridSessionCard({ session }: { session: any }) {
   const subject = session.subjects;
-  const color = subject?.color || "#3b82f6";
+  const color = subject?.color || "#FFD54F";
   const loc = (session.location || session.room || "").toLowerCase();
   const isOnline = loc.includes("online") || loc.includes("أونلاين") || loc.includes("اونلاين");
 
   return (
-    <div className="p-2 rounded-md text-2xs space-y-1 border-r-2" style={{ backgroundColor: `${color}15`, borderRightColor: color }}>
-      <p className="font-medium truncate">{subject?.name || "—"}</p>
-      <p className="font-mono text-text-muted tabular">{session.start_time?.slice(0, 5)}</p>
+    <div className="p-2 brutal-card-flat rounded-md text-2xs space-y-1" style={{ borderLeft: `4px solid ${color}` }}>
+      <p className="font-bold truncate">{subject?.name || "—"}</p>
+      <p className="font-mono text-gray">{session.start_time?.slice(0, 5)}</p>
       <div className="flex items-center gap-1 flex-wrap">
-        <span className="px-1 py-0.5 rounded bg-surface-base font-medium">
+        <span className="brutal-badge bg-cream-dark">
           {session.type === "lecture" ? "محاضرة" : session.type === "lab" ? "معمل" : session.type === "tutorial" ? "سكشن" : session.type}
         </span>
-        {isOnline && <Video className="w-2.5 h-2.5 text-info" />}
-        {session.group && session.group !== "all" && <span className="px-1 py-0.5 rounded bg-surface-base">مجموعة {session.group}</span>}
+        {isOnline && <Video className="w-3 h-3 text-teal-dark" />}
+        {session.group && session.group !== "all" && <span className="brutal-badge bg-cream-dark">مجموعة {session.group}</span>}
       </div>
-      {session.room && !isOnline && <p className="text-text-muted">{session.room}</p>}
+      {session.room && !isOnline && <p className="text-gray">{session.room}</p>}
     </div>
   );
 }
@@ -414,8 +415,8 @@ function TasksTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-heading tracking-tight flex items-center gap-2">
-        <CheckCircle2 className="w-5 h-5 text-success" />
+      <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+        <CheckCircle2 className="w-5 h-5" />
         التكليفات النشطة
       </h2>
       {tasks.length === 0 ? (
@@ -457,49 +458,49 @@ function InquiryTab() {
 
   if (success) {
     return (
-      <div className="card p-8 rounded-xl text-center space-y-4 animate-bounce-in max-w-md mx-auto">
-        <div className="w-16 h-16 rounded-full gradient-emerald flex items-center justify-center mx-auto">
-          <CheckCircle2 className="w-8 h-8 text-white" />
+      <div className="brutal-card p-8 rounded-xl text-center space-y-4 animate-bounce-in max-w-md mx-auto bg-green">
+        <div className="w-16 h-16 rounded-full border-2 border-ink bg-cream-light flex items-center justify-center mx-auto shadow-brutal-sm">
+          <CheckCircle2 className="w-8 h-8 text-ink" />
         </div>
-        <h3 className="font-heading text-lg">تم إرسال استفسارك!</h3>
-        <p className="text-sm text-text-secondary">سيتم التواصل معك عبر الواتساب</p>
-        <button onClick={() => setSuccess(false)} className="text-xs text-brand hover:text-brand-hover font-medium">إرسال استفسار آخر</button>
+        <h3 className="font-extrabold text-lg">تم إرسال استفسارك!</h3>
+        <p className="text-sm">سيتم التواصل معك عبر الواتساب</p>
+        <button onClick={() => setSuccess(false)} className="brutal-btn-ghost px-4 py-2 text-xs">إرسال استفسار آخر</button>
       </div>
     );
   }
 
   return (
     <div className="max-w-md mx-auto space-y-4">
-      <h2 className="text-xl font-heading tracking-tight flex items-center gap-2">
-        <MessageSquarePlus className="w-5 h-5 text-brand" />
+      <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+        <MessageSquarePlus className="w-5 h-5" />
         تقديم استفسار
       </h2>
-      <form onSubmit={handleSubmit} className="card p-5 rounded-lg space-y-4">
+      <form onSubmit={handleSubmit} className="brutal-card p-5 space-y-4">
         <div>
-          <label className="text-xs font-medium text-text-secondary mb-1.5 block flex items-center gap-1.5">
+          <label className="text-xs font-bold mb-1.5 block flex items-center gap-1.5">
             <User className="w-3 h-3" /> الاسم الكامل
           </label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="input w-full px-3.5 py-2.5 text-sm" />
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="brutal-input w-full px-3.5 py-2.5 text-sm" />
         </div>
         <div>
-          <label className="text-xs font-medium text-text-secondary mb-1.5 block flex items-center gap-1.5">
+          <label className="text-xs font-bold mb-1.5 block flex items-center gap-1.5">
             <Phone className="w-3 h-3" /> رقم الواتساب
           </label>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required dir="ltr" className="input w-full px-3.5 py-2.5 text-sm text-left font-mono" />
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required dir="ltr" className="brutal-input w-full px-3.5 py-2.5 text-sm text-left font-mono" />
         </div>
         <div>
-          <label className="text-xs font-medium text-text-secondary mb-1.5 block">تصنيف الاستفسار</label>
+          <label className="text-xs font-bold mb-1.5 block">تصنيف الاستفسار</label>
           <div className="grid grid-cols-4 gap-2">
             {["أكاديمي", "جدول", "تكليف", "عام"].map((cat) => (
-              <button key={cat} type="button" onClick={() => setCategory(cat)} className={`py-2 text-xs font-medium rounded-md border transition ${category === cat ? "gradient-brand text-white border-transparent" : "bg-surface-inset text-text-secondary border-border-default"}`}>{cat}</button>
+              <button key={cat} type="button" onClick={() => setCategory(cat)} className={`brutal-chip ${category === cat ? "active" : ""}`}>{cat}</button>
             ))}
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-text-secondary mb-1.5 block">الرسالة</label>
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={4} className="input w-full px-3.5 py-2.5 text-sm resize-none" />
+          <label className="text-xs font-bold mb-1.5 block">الرسالة</label>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={4} className="brutal-input w-full px-3.5 py-2.5 text-sm resize-none" />
         </div>
-        <button type="submit" disabled={submitting} className="btn-primary w-full py-3 rounded-md flex items-center justify-center gap-2 text-sm">
+        <button type="submit" disabled={submitting} className="brutal-btn-accent w-full py-3 flex items-center justify-center gap-2 text-sm">
           <Send className="w-4 h-4" /> {submitting ? "جاري الإرسال..." : "إرسال الاستفسار"}
         </button>
       </form>
@@ -528,20 +529,20 @@ function LinksTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-heading tracking-tight flex items-center gap-2">
-        <Link2 className="w-5 h-5 text-brand" /> روابط سريعة
+      <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+        <Link2 className="w-5 h-5" /> روابط سريعة
       </h2>
       {links.length === 0 ? (
         <EmptyState icon={Link2} message="لا توجد روابط" />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {links.map((link) => (
-            <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="card card-hover p-4 rounded-lg group">
-              <div className="w-10 h-10 rounded-lg gradient-brand flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-fast">
-                <ExternalLink className="w-5 h-5 text-white" />
+            <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="brutal-card p-4 group">
+              <div className="w-10 h-10 rounded-lg border-2 border-ink bg-yellow flex items-center justify-center mb-2 group-hover:rotate-6 transition-transform">
+                <ExternalLink className="w-5 h-5 text-ink" />
               </div>
-              <h3 className="font-medium text-sm mb-1">{link.title}</h3>
-              <p className="text-2xs text-text-muted">{link.type}</p>
+              <h3 className="font-bold text-sm mb-1">{link.title}</h3>
+              <p className="text-2xs text-gray">{link.type}</p>
             </a>
           ))}
         </div>
@@ -554,25 +555,25 @@ function LinksTab() {
 // Shared Components
 // ==========================================
 function AnnouncementCard({ announcement }: { announcement: any }) {
-  const getBadgeColor = (category: string) => {
+  const getBadgeStyle = (category: string) => {
     switch (category) {
-      case "عاجل": return "gradient-rose";
-      case "أكاديمي": return "gradient-brand";
-      case "هام": return "gradient-amber";
-      default: return "gradient-purple";
+      case "عاجل": return "bg-coral text-cream-light";
+      case "أكاديمي": return "bg-blue text-cream-light";
+      case "هام": return "bg-yellow text-ink";
+      default: return "bg-purple-soft text-cream-light";
     }
   };
   return (
-    <div className={`card p-4 rounded-lg space-y-2 ${announcement.is_pinned ? "border-brand/40" : ""}`}>
+    <div className={`brutal-card p-4 space-y-2 ${announcement.is_pinned ? "border-blue" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded text-2xs font-medium text-white ${getBadgeColor(announcement.category)}`}>{announcement.category}</span>
-          {announcement.is_pinned && <Pin className="w-3 h-3 text-brand fill-current" />}
+          <span className={`brutal-badge ${getBadgeStyle(announcement.category)}`}>{announcement.category}</span>
+          {announcement.is_pinned && <Pin className="w-3 h-3 fill-current" />}
         </div>
-        <span className="text-2xs text-text-muted">{new Date(announcement.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}</span>
+        <span className="text-2xs text-gray font-bold">{new Date(announcement.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}</span>
       </div>
-      <h3 className="font-heading text-sm leading-snug">{announcement.title}</h3>
-      <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-line">{announcement.content}</p>
+      <h3 className="font-extrabold text-sm leading-snug">{announcement.title}</h3>
+      <p className="text-xs text-gray leading-relaxed whitespace-pre-line">{announcement.content}</p>
     </div>
   );
 }
@@ -582,23 +583,23 @@ function DateCard({ date }: { date: any }) {
     switch (type) { case "exam": return AlertCircle; case "deadline": return Clock; case "holiday": return Calendar; default: return Calendar; }
   };
   const Icon = getIcon(date.type);
-  const getGradient = (type: string) => {
-    switch (type) { case "exam": return "gradient-rose"; case "deadline": return "gradient-amber"; case "holiday": return "gradient-emerald"; default: return "gradient-brand"; }
+  const getBg = (type: string) => {
+    switch (type) { case "exam": return "bg-coral"; case "deadline": return "bg-yellow"; case "holiday": return "bg-green"; default: return "bg-blue"; }
   };
   const dateObj = new Date(date.date);
   const daysUntil = Math.ceil((dateObj.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   return (
-    <div className="card card-hover p-3 rounded-lg flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-lg ${getGradient(date.type)} flex items-center justify-center flex-shrink-0`}>
-        <Icon className="w-5 h-5 text-white" />
+    <div className="brutal-card p-3 flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-lg border-2 border-ink ${getBg(date.type)} flex items-center justify-center flex-shrink-0`}>
+        <Icon className="w-5 h-5 text-ink" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-sm truncate">{date.title}</h3>
-        <p className="text-2xs text-text-muted">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</p>
+        <h3 className="font-bold text-sm truncate">{date.title}</h3>
+        <p className="text-2xs text-gray">{dateObj.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</p>
       </div>
       {daysUntil <= 7 && daysUntil >= 0 && (
-        <span className="text-2xs font-bold text-warning px-2 py-0.5 rounded-full bg-warning/10 border border-warning/30 flex-shrink-0">
-          {daysUntil === 0 ? "اليوم" : `${daysUntil} يوم`}
+        <span className="brutal-badge bg-yellow text-ink">
+          {daysUntil === 0 ? "اليوم" : `${daysUntil}ي`}
         </span>
       )}
     </div>
@@ -611,16 +612,16 @@ function TaskCard({ task }: { task: any }) {
   const isUrgent = daysLeft <= 3 && daysLeft >= 0;
   const isOverdue = daysLeft < 0;
   return (
-    <div className={`card p-4 rounded-lg space-y-2 ${isUrgent ? "border-warning/40" : ""}`}>
+    <div className={`brutal-card p-4 space-y-2 ${isUrgent ? "border-coral" : ""}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-bold px-2 py-0.5 rounded-full gradient-brand text-white">{task.subject}</span>
-        <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${isOverdue ? "bg-destructive/10 text-destructive border border-destructive/30" : isUrgent ? "bg-warning/10 text-warning border border-warning/30" : "bg-surface-inset text-text-muted"}`}>
+        <span className="brutal-badge bg-blue text-cream-light">{task.subject}</span>
+        <span className={`brutal-badge ${isOverdue ? "bg-coral text-cream-light" : isUrgent ? "bg-yellow text-ink" : "bg-cream-dark text-ink"}`}>
           {isOverdue ? "انتهى" : daysLeft === 0 ? "اليوم" : `${daysLeft} يوم`}
         </span>
       </div>
-      <h3 className="font-heading text-sm">{task.title}</h3>
-      {task.description && <p className="text-xs text-text-secondary leading-relaxed">{task.description}</p>}
-      <div className="flex items-center gap-1 text-2xs text-text-muted pt-1">
+      <h3 className="font-extrabold text-sm">{task.title}</h3>
+      {task.description && <p className="text-xs text-gray leading-relaxed">{task.description}</p>}
+      <div className="flex items-center gap-1 text-2xs text-gray font-bold pt-1">
         <Clock className="w-3 h-3" />
         <span>التسليم: {deadline.toLocaleDateString("ar-EG", { day: "numeric", month: "long" })}</span>
       </div>
@@ -640,11 +641,11 @@ function LoadingState() {
 
 function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
   return (
-    <div className="card p-8 rounded-lg text-center space-y-3">
-      <div className="w-12 h-12 rounded-full bg-surface-inset flex items-center justify-center mx-auto">
-        <Icon className="w-6 h-6 text-text-muted" />
+    <div className="brutal-card p-8 rounded-xl text-center space-y-3">
+      <div className="w-12 h-12 rounded-full border-2 border-ink bg-cream-dark flex items-center justify-center mx-auto">
+        <Icon className="w-6 h-6 text-gray" />
       </div>
-      <p className="text-xs text-text-muted">{message}</p>
+      <p className="text-xs text-gray font-bold">{message}</p>
     </div>
   );
 }

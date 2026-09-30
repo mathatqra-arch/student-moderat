@@ -651,8 +651,14 @@ function NextSessionCard({ session, when }: { session: any; when: Date }) {
   const typeLabel = sessionTypeLabel(session.type);
   const typeBg = sessionTypeBg(session.type);
 
+  // رابط الحصة الأونلاين — لو موجود الكارت كله قابل للضغط يفتح المحاضرة
+  const onlineUrl = sessionOnlineUrl(session);
+  const hasOnlineLink = isOnline && onlineUrl.startsWith("http");
+  const CardWrapper = hasOnlineLink ? "a" : "div";
+  const cardProps = hasOnlineLink ? { href: onlineUrl, target: "_blank", rel: "noopener noreferrer" } : {};
+
   return (
-    <div className="brutal-card p-3 flex items-center gap-3">
+    <CardWrapper {...(cardProps as any)} className={`brutal-card p-3 flex items-center gap-3 ${hasOnlineLink ? "cursor-pointer hover:translate-x-[-2px] hover:translate-y-[-2px]" : ""}`}>
       <div className="w-1.5 h-12 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -661,6 +667,12 @@ function NextSessionCard({ session, when }: { session: any; when: Date }) {
             {typeLabel}
           </span>
           <span className="brutal-badge bg-cream-dark text-ink">أسبوعي</span>
+          {hasOnlineLink && (
+            <span className="brutal-badge bg-teal">
+              <ExternalLink className="w-2.5 h-2.5" />
+              انضم
+            </span>
+          )}
         </div>
         <h3 className="font-bold text-sm truncate text-ink mt-1">{subject?.name || "—"}</h3>
         <p className="text-2xs text-gray font-bold">
@@ -673,7 +685,7 @@ function NextSessionCard({ session, when }: { session: any; when: Date }) {
           {daysUntil === 0 ? "اليوم" : daysUntil === 1 ? "غداً" : `${daysUntil}ي`}
         </span>
       )}
-    </div>
+    </CardWrapper>
   );
 }
 

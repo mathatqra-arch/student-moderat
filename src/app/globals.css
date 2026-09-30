@@ -237,6 +237,22 @@
     letter-spacing: 0.03em;
   }
 
+  /* Badge صغير — لخلايا شبكة الجدول الضيقة (موبايل) حتى لا تكسر الصف */
+  .brutal-badge-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border: 1.5px solid var(--ink);
+    border-radius: var(--radius-pill);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
   /* Nav item — sidebar */
   .brutal-nav-item {
     display: flex;

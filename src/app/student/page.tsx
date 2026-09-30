@@ -355,9 +355,9 @@ function ScheduleTab() {
           ))}
         </div>
       ) : (
-        <div className="hidden lg:grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
           {DAYS.map((day, dayIdx) => (
-            <div key={day} className="space-y-2">
+            <div key={day} className="space-y-2 min-w-0">
               <h3 className="text-xs font-extrabold text-center py-1.5 brutal-card-flat rounded-md bg-cream-dark">{day}</h3>
               {grouped[dayIdx]?.map((s) => (
                 <GridSessionCard key={s.id} session={s} />
@@ -440,15 +440,28 @@ function GridSessionCard({ session }: { session: any }) {
   const cardProps = hasOnlineLink ? { href: onlineUrl, target: "_blank", rel: "noopener noreferrer" } : {};
 
   return (
-    <CardWrapper {...(cardProps as any)} className={`p-2 brutal-card-flat rounded-md text-2xs space-y-1 ${hasOnlineLink ? "cursor-pointer hover:shadow-brutal-sm" : ""}`} style={{ borderLeft: `4px solid ${color}` }}>
+    <CardWrapper {...(cardProps as any)} className={`block p-2 brutal-card-flat rounded-md text-2xs space-y-1 min-w-0 overflow-hidden ${hasOnlineLink ? "cursor-pointer hover:shadow-brutal-sm" : ""}`} style={{ borderLeft: `4px solid ${color}` }}>
       <p className="font-bold truncate text-ink">{subject?.name || "—"}</p>
-      <p className="text-gray font-bold">{formatTime12(session.start_time)}</p>
-      <div className="flex items-center gap-1 flex-wrap">
-        <span className="brutal-badge bg-cream-dark">{sessionTypeLabel(session.type)}</span>
-        {isOnline && <span className="brutal-badge bg-green"><Video className="w-2.5 h-2.5" />أونلاين</span>}
-        {hasOnlineLink && <span className="brutal-badge bg-teal"><ExternalLink className="w-2.5 h-2.5" />انضم</span>}
+      <p className="text-gray font-bold whitespace-nowrap">{formatTime12(session.start_time)}</p>
+      {/* بادج واحد بس للحضور: فيه لينك ← انضم (الأونلاين مفهومة منه) · أونلاين بدون لينك ← أونلاين */}
+      <div className="flex items-center gap-1 flex-wrap min-w-0">
+        <span className="brutal-badge brutal-badge-sm bg-cream-dark text-ink flex-shrink-0">
+          {sessionTypeLabel(session.type)}
+        </span>
+        {hasOnlineLink && (
+          <span className="brutal-badge brutal-badge-sm bg-teal text-ink flex-shrink-0">
+            <ExternalLink className="w-2 h-2 flex-shrink-0" />
+            انضم
+          </span>
+        )}
+        {isOnline && !hasOnlineLink && (
+          <span className="brutal-badge brutal-badge-sm bg-green text-ink flex-shrink-0">
+            <Video className="w-2 h-2 flex-shrink-0" />
+            أونلاين
+          </span>
+        )}
       </div>
-      {!isOnline && session.room && <p className="text-gray font-bold">{session.room}</p>}
+      {!isOnline && session.room && <p className="text-gray font-bold truncate">{session.room}</p>}
     </CardWrapper>
   );
 }

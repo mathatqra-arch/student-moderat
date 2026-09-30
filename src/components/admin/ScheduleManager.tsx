@@ -11,6 +11,9 @@ import {
   MapPin,
   Video,
   Users,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatTime12, sessionTypeLabel, sessionTypeBg, isSessionOnline } from "@/lib/format";
@@ -35,6 +38,9 @@ export default function ScheduleManager() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<"schedule" | "subjects">("schedule");
+  // التعديل الفوري — معرف الجلسة/المادة المفتوح للتعديل حالياً
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
 
   // Form state
   const [newSubject, setNewSubject] = useState("");
@@ -318,7 +324,15 @@ export default function ScheduleManager() {
                         const isOnline = isSessionOnline(s);
                         const sessionLink = typeof s.link === "string" && s.link.startsWith("http") ? s.link : "";
 
-                        return (
+                        return editingId === s.id ? (
+                          <EditSessionForm
+                            key={s.id}
+                            session={s}
+                            subjects={subjects}
+                            onCancel={() => setEditingId(null)}
+                            onSaved={() => { setEditingId(null); fetchData(); }}
+                          />
+                        ) : (
                           <div key={s.id} className="brutal-card-flat p-3 flex items-center gap-3">
                             {/* Color bar */}
                             <div className="w-1.5 h-12 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
@@ -367,13 +381,23 @@ export default function ScheduleManager() {
                               </div>
                             </div>
 
-                            {/* Delete */}
-                            <button
-                              onClick={() => handleDeleteSchedule(s.id)}
-                              className="p-2 rounded-lg border-2 border-ink bg-coral hover:bg-coral-light transition flex-shrink-0"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-ink" />
-                            </button>
+                            {/* تعديل فوري + حذف */}
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <button
+                                onClick={() => setEditingId(s.id)}
+                                title="تعديل الجلسة"
+                                className="p-2 rounded-lg border-2 border-ink bg-yellow hover:opacity-80 transition"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-ink" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSchedule(s.id)}
+                                title="حذف الجلسة"
+                                className="p-2 rounded-lg border-2 border-ink bg-coral hover:bg-coral-light transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-ink" />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -437,25 +461,277 @@ export default function ScheduleManager() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {subjects.map((s) => (
-                  <div key={s.id} className="flex items-center gap-3 p-3 brutal-card-flat">
-                    <div className="w-10 h-10 rounded-lg border-2 border-ink flex items-center justify-center text-ink font-extrabold flex-shrink-0" style={{ backgroundColor: s.color }}>
-                      {s.name.charAt(0)}
+                {subjects.map((s) =>
+                  editingSubjectId === s.id ? (
+                    <EditSubjectForm
+                      key={s.id}
+                      subject={s}
+                      onCancel={() => setEditingSubjectId(null)}
+                      onSaved={() => { setEditingSubjectId(null); fetchData(); }}
+                    />
+                  ) : (
+                    <div key={s.id} className="flex items-center gap-3 p-3 brutal-card-flat">
+                      <div className="w-10 h-10 rounded-lg border-2 border-ink flex items-center justify-center text-ink font-extrabold flex-shrink-0" style={{ backgroundColor: s.color }}>
+                        {s.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-ink truncate">{s.name}</p>
+                        <p className="text-2xs text-gray">{s.code || "—"} • {s.instructor || "—"}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => setEditingSubjectId(s.id)}
+                          title="تعديل المادة"
+                          className="p-2 rounded-lg border-2 border-ink bg-yellow hover:opacity-80 transition"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-ink" />
+                        </button>
+                        <button onClick={() => handleDeleteSubject(s.id)} title="حذف المادة" className="p-2 rounded-lg border-2 border-ink bg-coral hover:bg-coral-light transition">
+                          <Trash2 className="w-3.5 h-3.5 text-ink" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm text-ink truncate">{s.name}</p>
-                      <p className="text-2xs text-gray">{s.code || "—"} • {s.instructor || "—"}</p>
-                    </div>
-                    <button onClick={() => handleDeleteSubject(s.id)} className="p-2 rounded-lg border-2 border-ink bg-coral hover:bg-coral-light transition flex-shrink-0">
-                      <Trash2 className="w-3.5 h-3.5 text-ink" />
-                    </button>
-                  </div>
-                ))}
+                  )
+                )}
               </div>
             )}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ==========================================
+// نموذج تعديل جلسة — فوري داخل مكان الصف (قاعدة النوعين مطبقة)
+// ==========================================
+function EditSessionForm({ session, subjects, onCancel, onSaved }: {
+  session: any;
+  subjects: any[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [subjectId, setSubjectId] = useState(session.subject_id || "");
+  const [day, setDay] = useState<number>(session.day_of_week ?? 0);
+  const [start, setStart] = useState(String(session.start_time || "").slice(0, 5));
+  const [end, setEnd] = useState(String(session.end_time || "").slice(0, 5));
+  const [room, setRoom] = useState(session.room || "");
+  const [link, setLink] = useState(session.link || "");
+  const [type, setType] = useState(TYPES.some((t) => t.value === session.type) ? session.type : "lecture");
+  const [mode, setMode] = useState(session.lecture_type === "online" ? "online" : "university");
+  const [saving, setSaving] = useState(false);
+
+  // قاعدة النوعين: في الكلية ← المكان إلزامي
+  const canSave = Boolean(subjectId) && start && end && (mode === "online" || room.trim() !== "");
+
+  const save = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    const supabase = createClient();
+    const trimmedRoom = room.trim();
+    const trimmedLink = link.trim();
+    await supabase.from("schedules").update({
+      subject_id: subjectId,
+      day_of_week: day,
+      start_time: start,
+      end_time: end,
+      type,
+      lecture_type: mode,
+      room: mode === "university" ? trimmedRoom : null,
+      link: mode === "online" && trimmedLink.startsWith("http") ? trimmedLink : null,
+      location: mode === "university" ? (trimmedRoom || "الكلية") : "أونلاين",
+    }).eq("id", session.id);
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <div className="brutal-card-flat p-4 space-y-3 border-2 border-ink">
+      <div className="flex items-center justify-between pb-2 border-b-2 border-ink">
+        <h4 className="font-extrabold text-sm text-ink flex items-center gap-2">
+          <Pencil className="w-4 h-4" />
+          تعديل الجلسة
+        </h4>
+        <button onClick={onCancel} title="إلغاء" className="p-1.5 rounded-lg border-2 border-ink bg-cream-light hover:bg-gray-bg transition">
+          <X className="w-4 h-4 text-ink" />
+        </button>
+      </div>
+
+      {/* المادة + اليوم */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">المادة</label>
+          <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm">
+            {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">اليوم</label>
+          <select value={day} onChange={(e) => setDay(parseInt(e.target.value))} className="brutal-input w-full px-3 py-2 text-sm">
+            {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* الوقت بنظام 12 ساعة (معاينة فورية) */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">من</label>
+          <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm" />
+          <p className="text-2xs text-gray font-bold mt-1">يعادل: {formatTime12(start)}</p>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">إلى</label>
+          <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm" />
+          <p className="text-2xs text-gray font-bold mt-1">يعادل: {formatTime12(end)}</p>
+        </div>
+      </div>
+
+      {/* النوع + الحضور — نوعين بس */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">النوع (نوعين بس)</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {TYPES.map((t) => {
+              const Icon = t.icon;
+              return (
+                <button key={t.value} type="button" onClick={() => setType(t.value)}
+                  className={`flex items-center justify-center gap-1.5 py-2 rounded-md border-2 text-xs font-bold transition ${type === t.value ? `border-ink ${t.color} shadow-brutal-sm` : "border-ink bg-cream-light text-gray"}`}>
+                  <Icon className="w-3.5 h-3.5" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">الحضور (نوعين بس)</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {MODES.map((m) => {
+              const Icon = m.icon;
+              return (
+                <button key={m.value} type="button" onClick={() => setMode(m.value)}
+                  className={`flex items-center justify-center gap-1.5 py-2 rounded-md border-2 text-xs font-bold transition ${mode === m.value ? `border-ink ${m.color} shadow-brutal-sm` : "border-ink bg-cream-light text-gray"}`}>
+                  <Icon className="w-3.5 h-3.5" />
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* قاعدة الحضور — في الكلية ← المكان إلزامي · أونلاين ← اللينك اختياري */}
+      {mode === "university" ? (
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">
+            المكان (القاعة / المبنى) <span className="text-coral">*</span>
+          </label>
+          <input type="text" value={room} onChange={(e) => setRoom(e.target.value)} placeholder="مثال: قاعة 101 أو مبنى B" className="brutal-input w-full px-3 py-2.5 text-sm" />
+        </div>
+      ) : (
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">رابط الحصة (اللينك) — اختياري لو موجود</label>
+          <input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://zoom.us/j/..." dir="ltr" className="brutal-input w-full px-3 py-2.5 text-sm text-left font-mono" />
+        </div>
+      )}
+
+      {/* حفظ / إلغاء */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={save}
+          disabled={!canSave || saving}
+          className="flex-1 brutal-btn-accent py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          حفظ التعديل
+        </button>
+        <button type="button" onClick={onCancel} className="px-4 py-2.5 rounded-md border-2 border-ink bg-cream-light text-xs font-extrabold text-ink hover:bg-gray-bg transition flex items-center gap-1.5">
+          <X className="w-4 h-4" />
+          إلغاء
+        </button>
+      </div>
+      {!canSave && (
+        <p className="text-2xs text-gray font-bold">
+          {mode === "university" ? "الحصة في الكلية — المكان إلزامي" : "اختر المادة وأوقات صحيحة"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// نموذج تعديل مادة — فوري داخل مكان الصف
+// ==========================================
+function EditSubjectForm({ subject, onCancel, onSaved }: {
+  subject: any;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(subject.name || "");
+  const [code, setCode] = useState(subject.code || "");
+  const [instructor, setInstructor] = useState(subject.instructor || "");
+  const [color, setColor] = useState(subject.color || "#5C95FF");
+  const [saving, setSaving] = useState(false);
+
+  const canSave = name.trim() !== "" && !saving;
+
+  const save = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    const supabase = createClient();
+    await supabase.from("subjects").update({
+      name: name.trim(),
+      code: code.trim() || null,
+      instructor: instructor.trim() || null,
+      color,
+    }).eq("id", subject.id);
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <div className="sm:col-span-2 brutal-card-flat p-4 space-y-3 border-2 border-ink">
+      <div className="flex items-center justify-between pb-2 border-b-2 border-ink">
+        <h4 className="font-extrabold text-sm text-ink flex items-center gap-2">
+          <Pencil className="w-4 h-4" />
+          تعديل المادة
+        </h4>
+        <button onClick={onCancel} title="إلغاء" className="p-1.5 rounded-lg border-2 border-ink bg-cream-light hover:bg-gray-bg transition">
+          <X className="w-4 h-4 text-ink" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">اسم المادة</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">الكود</label>
+          <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="CS401" className="brutal-input w-full px-3 py-2 text-sm font-mono" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">المدرس</label>
+          <input type="text" value={instructor} onChange={(e) => setInstructor(e.target.value)} placeholder="د. أحمد" className="brutal-input w-full px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-ink mb-1 block">اللون</label>
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-full h-10 brutal-input px-2 py-1 cursor-pointer" />
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button type="button" onClick={save} disabled={!canSave} className="flex-1 brutal-btn-accent py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          حفظ التعديل
+        </button>
+        <button type="button" onClick={onCancel} className="px-4 py-2.5 rounded-md border-2 border-ink bg-cream-light text-xs font-extrabold text-ink hover:bg-gray-bg transition flex items-center gap-1.5">
+          <X className="w-4 h-4" />
+          إلغاء
+        </button>
+      </div>
     </div>
   );
 }

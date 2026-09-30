@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Inquiry } from "@/types/database";
 import { MessageSquare, Phone, CheckCircle, Clock, Archive, Sparkles, Filter } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { whatsappChatUrl, buildInquiryReplyMessage } from "@/lib/whatsapp";
 
 const defaultInquiries: Inquiry[] = [
   {
@@ -162,11 +163,9 @@ export default function InquiriesManager() {
               </span>
 
               <div className="flex items-center gap-2">
-                {/* WhatsApp Direct Chat Button */}
+                {/* WhatsApp Direct Chat Button — يفتح واتساب برسالة مثبتة تتضمن مشكلة الطالب والرد */}
                 <a
-                  href={`https://wa.me/${inquiry.whatsapp_number.replace(/\+/g, "")}?text=${encodeURIComponent(
-                    `مرحباً ${inquiry.full_name}، رداً على استفسارك بخصوص (${inquiry.category}):\n${inquiry.ai_suggestion || ""}`
-                  )}`}
+                  href={whatsappChatUrl(inquiry.whatsapp_number, buildInquiryReplyMessage(inquiry))}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition shadow-sm shadow-emerald-600/20"

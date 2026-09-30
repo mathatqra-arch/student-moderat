@@ -1,8 +1,11 @@
 // ==========================================
-// Supabase Edge Function: MCP Server v3.3
+// Supabase Edge Function: MCP Server v3.4
 // ~55 أداة تغطي كل وظائف المنصة للأدمن + OAuth 2.1
 // + Rate Limiting ذري + سجل تدقيق + تحقق من المدخلات
-// + الوقت 12 ساعة (ص/م) + نوع الحصة بالعربي + الحضور أونلاين/اوفلاين + رابط الحصة
+// + الوقت 12 ساعة (ص/م) + الحضور أونلاين/اوفلاين + رابط الحصة
+// + قاعدة النوعين (v3.4): نوع الحصة نوعين فقط محاضرة/سكشن
+//   ونوع الحضور نوعين فقط في الكلية/أونلاين —
+//   في الكلية ← المكان (room) إلزامي، أونلاين ← اللينك (link) اختياري
 //
 // النشر: ./scripts/deploy-edge.sh
 // ==========================================
@@ -31,19 +34,22 @@ type Tool = { name: string; description: string; inputSchema: Record<string, unk
 
 const strEnum = (values: string[]) => ({ type: "string", enum: values });
 
-// ─── أوصاف موحدة لأدوات الجدول (النوع + الحضور + الوقت 12 ساعة + اللينك) ───
+// ─── أوصاف موحدة لأدوات الجدول (قاعدة النوعين + الوقت 12 ساعة + اللينك) ───
+// v3.4: نوعين بس للمادة (محاضرة/سكشن) ونوعين بس للحضور (في الكلية/أونلاين)
 const SCHED_TYPE_DESC = {
   type: "string",
-  enum: ["lecture", "tutorial", "section", "lab", "exam", "other", "محاضرة", "سكشن", "معمل", "امتحان", "أي"],
-  description: "نوع الحصة: lecture=محاضرة، tutorial/section=سكشن، lab=معمل، exam=امتحان، other=أي حصة أخرى. اكتب بالعربي مباشرة (محاضرة أو سكشن).",
+  enum: ["محاضرة", "سكشن", "lecture", "section"],
+  description: "نوع الحصة — نوعين فقط: محاضرة (lecture) أو سكشن (section/سكاشن). ممنوع أي نوع آخر (لا معمل ولا امتحان ولا غيرهم).",
 };
 const SCHED_MODE_DESC = {
   type: "string",
-  enum: ["online", "offline", "university", "hybrid", "أونلاين", "اوفلاين", "جامعة", "مختلط"],
-  description: "نوع الحضور: online/أونلاين = أونلاين، offline/اوفلاين/جامعة = حضوري، hybrid = مختلط. اكتب بالعربي مباشرة (أونلاين أو أوفلاين).",
+  enum: ["في الكلية", "أونلاين", "offline", "online"],
+  description: "نوع الحضور — نوعين فقط: في الكلية (اوفلاين/حضوري) أو أونلاين (online). ممنوع أي نوع آخر (لا مختلط ولا غيرهما).",
 };
 const TIME_DESC = "وقت بنظام 12 ساعة مثل 2:30 م أو 10:00 ص (أو 24 ساعة مثل 14:30) — التحويل تلقائي";
-const LINK_DESC = "رابط الحصة الأونلاين (Zoom/Meet) — يجب أن يبدأ بـ https:// — للحصص الأونلاين أو المختلطة";
+const LINK_DESC = "رابط الحصة الأونلاين (Zoom/Meet) يبدأ بـ https:// — للحصص الأونلاين فقط واختياري (لو موجود)";
+const ROOM_DESC = "المكان في الكلية (إلزامي للحصص الحضورية) مثل: قاعة 101 أو مبنى B";
+const RULE_DESC = "القاعدة: في الكلية ← المكان (room) إلزامي · أونلاين ← اللينك (link) اختياري لو موجود.";
 
 // ==========================================
 // الأدوات (~55) — كل وظائف المنصة للأدمن
@@ -77,13 +83,13 @@ const TOOLS: Tool[] = [
 
   // ─── الجدول الأسبوعي (المجموعات + النوع محاضرة/سكشن + الحضور أونلاين/اوفلاين + القاعة واللينك) ───
   // القاعدة الزمنية الموحدة: المستخدم يكتب ويرى الوقت بنظام 12 ساعة (مثل "2:30 م") والتحويل تلقائي.
-  { name: "list_schedule", description: "عرض الجدول الأسبوعي مع المواد — كل جلسة تشمل time_display بنظام 12 ساعة (مثل 2:30 م) وتسميات عربية للنوع والحضور.", inputSchema: objectSchema({ day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, group: strEnum(["أ", "ب", "ج", "د", "all"]), type: SCHED_TYPE_DESC, lecture_type: SCHED_MODE_DESC, active_only: { type: "boolean", default: true } }) },
-  { name: "create_schedule_session", description: "إضافة جلسة للجدول — النوع (محاضرة/سكشن/معمل/امتحان/أي) والحضور (أونلاين/اوفلاين) بالعربي أو إنجليزي + القاعة (العنوان) أو رابط الحصة (link).", inputSchema: objectSchema({ subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: "القاعة/العنوان للحصص الحضورية مثل: قاعة 101" }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" } }, ["subject_id", "day_of_week", "start_time", "end_time"]) },
-  { name: "update_schedule_session", description: "تعديل جلسة جدول — نفس حقول الإضافة + إلغاء التفعيل. يمكن تحديث اللينك أو القاعة أو الوقت (12 ساعة مقبولة).", inputSchema: objectSchema({ schedule_id: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: "القاعة/العنوان" }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" }, is_active: { type: "boolean" } }, ["schedule_id"]) },
+  { name: "list_schedule", description: "عرض الجدول الأسبوعي مع المواد — فلترة بالنوع (محاضرة/سكشن) وبنوع الحضور (في الكلية/أونلاين). كل جلسة تشمل time_display بنظام 12 ساعة (مثل 2:30 م) وتسميات عربية.", inputSchema: objectSchema({ day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, group: strEnum(["أ", "ب", "ج", "د", "all"]), type: SCHED_TYPE_DESC, lecture_type: SCHED_MODE_DESC, active_only: { type: "boolean", default: true } }) },
+  { name: "create_schedule_session", description: `إضافة جلسة للجدول — نوعين فقط: محاضرة أو سكشن + حضور نوعين فقط: في الكلية أو أونلاين. ${RULE_DESC} الوقت بنظام 12 ساعة.`, inputSchema: objectSchema({ subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: ROOM_DESC }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" } }, ["subject_id", "day_of_week", "start_time", "end_time"]) },
+  { name: "update_schedule_session", description: `تعديل جلسة جدول — نفس قواعد الإضافة (نوعين: محاضرة/سكشن · حضور: في الكلية/أونلاين · ${RULE_DESC}) + إلغاء التفعيل.`, inputSchema: objectSchema({ schedule_id: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: ROOM_DESC }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" }, is_active: { type: "boolean" } }, ["schedule_id"]) },
   { name: "delete_schedule_session", description: "حذف جلسة من الجدول.", inputSchema: objectSchema({ schedule_id: { type: "string" } }, ["schedule_id"]) },
   { name: "get_week_schedule", description: "عرض الجدول الأسبوعي كاملاً — الأيام بالترتيب والحصص مرتبة حسب الوقت داخل كل يوم، والأوقات معروضة بنظام 12 ساعة (مثل 2:30 م).", inputSchema: objectSchema({ group: strEnum(["أ", "ب", "ج", "د", "all"]) }) },
   { name: "upsert_subject_by_name", description: "إضافة مادة جديدة بالاسم مباشرة (بدون UUID) — لو فيه مادة بنفس الاسم يرجعها كما هي بدون تكرار.", inputSchema: objectSchema({ name: { type: "string" }, code: { type: "string" }, instructor: { type: "string" }, color: { type: "string", description: "hex مثل #3b82f6" }, icon: { type: "string" }, semester: { type: "string" }, credits: { type: "integer" } }, ["name"]) },
-  { name: "set_schedule_session", description: "إضافة جلسة للجدول بالاسم مباشرة — لو المادة غير موجودة يتم إنشاؤها تلقائياً (لا حاجة لمعرفة subject_id). مثال: محاضرة قواعد بيانات يوم الإثنين 10:00 ص — أو سكشن بنظام أونلاين مع لينك.", inputSchema: objectSchema({ subject_name: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: "القاعة/العنوان" }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" } }, ["day_of_week", "start_time", "end_time"]) },
+  { name: "set_schedule_session", description: `إضافة جلسة للجدول بالاسم مباشرة — لو المادة غير موجودة يتم إنشاؤها تلقائياً (لا حاجة لمعرفة subject_id). نوعين فقط: محاضرة/سكشن وحضور: في الكلية/أونلاين. ${RULE_DESC} مثال: محاضرة قواعد بيانات يوم الإثنين 2:30 م في قاعة 101 — أو سكشن أونلاين مع لينك Zoom.`, inputSchema: objectSchema({ subject_name: { type: "string" }, subject_id: { type: "string" }, day_of_week: { type: "integer", description: "0=الأحد .. 6=السبت" }, start_time: { type: "string", description: TIME_DESC }, end_time: { type: "string", description: TIME_DESC }, room: { type: "string", description: ROOM_DESC }, link: { type: "string", description: LINK_DESC }, type: SCHED_TYPE_DESC, group: strEnum(["أ", "ب", "ج", "د", "all"]), lecture_type: SCHED_MODE_DESC, notes: { type: "string" } }, ["day_of_week", "start_time", "end_time"]) },
 
   // ─── المواعيد المهمة ───
   { name: "list_important_dates", description: "عرض المواعيد المهمة (امتحانات، تسليمات، إجازات).", inputSchema: objectSchema({ type: strEnum(["exam", "deadline", "holiday", "event", "registration"]), upcoming_only: { type: "boolean", default: false }, limit: { type: "integer", default: 50 } }) },
@@ -270,39 +276,47 @@ function normalizeTimeInput(v: unknown, field: string, required = true): string 
   return `${String(h).padStart(2, "0")}:${min}`;
 }
 
-/** توحيد نوع الحصة: يقبل العربي (محاضرة/سكشن/معمل/امتحان/أي) والإنجليزي و section/other. */
+/**
+ * توحيد نوع الحصة — نوعين فقط (v3.4): محاضرة (lecture) أو سكشن (tutorial/section).
+ * أي قيمة أخرى (معمل/امتحان/أي/غيرهم) مرفوضة — القيم القديمة الموجودة مسبقاً في القاعدة تبقى معروضة كما هي.
+ */
 function normalizeScheduleType(v: unknown): string | undefined {
   if (v === undefined || v === null || String(v).trim() === "") return undefined;
-  const s = String(v).trim().toLowerCase().replace(/[ً]/g, "");
-  const map: Record<string, string> = {
-    "lecture": "lecture", "محاضره": "lecture", "محاضرة": "lecture", "محاضره.": "lecture",
-    "tutorial": "tutorial", "section": "tutorial", "سكشن": "tutorial", "سكسن": "tutorial",
-    "lab": "lab", "معمل": "lab", "لاب": "lab",
-    "exam": "exam", "امتحان": "exam",
-    "other": "other", "any": "other", "اي": "other", "أي": "other", "أي حصة": "other", "اي حصة": "other", "أي حصه": "other", "أخرى": "other", "اخري": "other", "حصة": "other", "حصه": "other",
-  };
-  const mapped = map[s];
-  if (!mapped) {
-    throw new Error(`نوع الحصة غير معروف: "${v}" — المسموح: محاضرة (lecture) / سكشن (section) / معمل (lab) / امتحان (exam) / أي حصة (other)`);
-  }
-  return mapped;
+  const s = String(v).trim().toLowerCase().replace(/[ً.:\s]/g, "");
+  const lecture = ["lecture", "محاضره", "محاضرة", "محاضرات", "محاضره", "lec"];
+  const section = ["tutorial", "section", "سكشن", "سكسن", "سكاشن", "سكشنه", "sec"];
+  if (lecture.includes(s)) return "lecture";
+  if (section.includes(s)) return "tutorial";
+  throw new Error(`نوع الحصة نوعين فقط: محاضرة (lecture) أو سكشن (section) — القيمة "${v}" غير مسموحة (لا معمل ولا امتحان ولا أي)`);
 }
 
-/** توحيد نوع الحضور: أونلاين/اوفلاين/جامعة/مختلط (عربي وإنجليزي) → university/online/hybrid. */
+/**
+ * توحيد نوع الحضور — نوعين فقط (v3.4): في الكلية (university) أو أونلاين (online).
+ * أي قيمة أخرى (مختلط/hybrid/غيرهما) مرفوضة — القيم القديمة الموجودة مسبقاً تبقى معروضة كما هي.
+ */
 function normalizeLectureType(v: unknown): string | undefined {
   if (v === undefined || v === null || String(v).trim() === "") return undefined;
-  const s = String(v).trim().toLowerCase().replace(/[ً]/g, "").replace(/\s+/g, "");
-  const map: Record<string, string> = {
-    "university": "university", "offline": "university", "اوفلاين": "university", "أوفلاين": "university", "اوف لاين": "university", "جامعة": "university", "جامعه": "university",
-    "حضوري": "university", "فيالكلية": "university", "oncampus": "university",
-    "online": "online", "أونلاين": "online", "اونلاين": "online", "اون لاين": "online", "عبرالإنترنت": "online", "عبرانترنت": "online", "remote": "online",
-    "hybrid": "hybrid", "مختلط": "hybrid", "مدمج": "hybrid",
-  };
-  const mapped = map[s];
-  if (!mapped) {
-    throw new Error(`نوع الحضور غير معروف: "${v}" — المسموح: أونلاين (online) / أوفلاين أو جامعة (offline/university) / مختلط (hybrid)`);
+  const s = String(v).trim().toLowerCase().replace(/[ً.\s]/g, "").replace(/[أإآ]/g, "ا");
+  const offline = ["university", "offline", "اوفلاين", "جامعه", "جامعة", "حضوري", "فيالكليه", "فيالكلية", "الكلية", "كليه", "oncampus", "campus", "college"];
+  const online = ["online", "اونلاين", "عبرالانترنت", "عبرانترنت", "remote"];
+  if (offline.includes(s)) return "university";
+  if (online.includes(s)) return "online";
+  throw new Error(`نوع الحضور نوعين فقط: "في الكلية" (اوفلاين) أو "أونلاين" (online) — القيمة "${v}" غير مسموحة (لا مختلط)`);
+}
+
+/**
+ * قاعدة النوعين (v3.4):
+ * - الحصة في الكلية (اوفلاين): المكان (room) إلزامي — لو فاقد نرفض مع رسالة واضحة للـ AI.
+ * - الحصة أونلاين: اللينك (link) اختياري — لو موجود يتحقق أنه رابط صالح في normalizeScheduleFields.
+ * تُستدعى على الصف النهائي (المدموج مع القيم الحالية في حالة التعديل).
+ */
+function validateSchedulePresenceRule(row: Record<string, any>) {
+  const mode = String(row.lecture_type || "university");
+  if (mode === "online") return; // أونلاين: اللينك اختياري (لو موجود)
+  const place = String(row.room || "").trim() || String(row.location || "").trim();
+  if (!place) {
+    throw new Error('الحصة "في الكلية" — لازم إدخال المكان في room (مثال: قاعة 101 أو مبنى B). لو الحصة أونلاين حدد lecture_type = "أونلاين".');
   }
-  return mapped;
 }
 
 /** تطبيق كل توحيدات الجدول على صف قبل الإدخال/التعديل + التحقق من رابط الحصة.
@@ -333,7 +347,7 @@ function normalizeScheduleFields(row: Record<string, any>, opts: { requireTimes?
 function annotateScheduleRow(s: any): any {
   if (!s || typeof s !== "object") return s;
   const typeAr: Record<string, string> = { lecture: "محاضرة", tutorial: "سكشن", lab: "معمل", exam: "امتحان", other: "حصة" };
-  const modeAr: Record<string, string> = { university: "أوفلاين (جامعة)", online: "أونلاين", hybrid: "مختلط" };
+  const modeAr: Record<string, string> = { university: "في الكلية", online: "أونلاين", hybrid: "مختلط" };
   return {
     ...s,
     time_display: `${to12hArabic(s.start_time)} - ${to12hArabic(s.end_time)}`,
@@ -610,6 +624,8 @@ async function executeTool(name: string, args: any, supabase: any) {
     }
     case "create_schedule_session": {
       const payload = normalizeScheduleFields(stripUndefined(args), { requireTimes: true });
+      // قاعدة النوعين: في الكلية ← المكان إلزامي، أونلاين ← اللينك اختياري
+      validateSchedulePresenceRule(payload);
       return rowResult(table(supabase, "schedules").insert([payload]).select("*, subjects(*)").single());
     }
     case "update_schedule_session": {
@@ -617,6 +633,11 @@ async function executeTool(name: string, args: any, supabase: any) {
       const clean = normalizeScheduleFields(stripUndefined(patch));
       // السماح بمسح اللينك بإرسال نص فارغ أو null (stripUndefined يسقط null فيجب التعامل الصريح)
       if (patch?.link !== undefined) clean.link = normalizeScheduleFields({ link: patch.link }).link ?? null;
+      // قاعدة النوعين على الحالة النهائية المدموجة (التعديل الجزئي + القيم الموجودة)
+      const cur = await table(supabase, "schedules").select("room, location, lecture_type").eq("id", schedule_id).maybeSingle();
+      if (cur.error) throw cur.error;
+      if (!cur.data) throw new Error(`لم يتم العثور على جلسة بالمعرف: ${schedule_id}`);
+      validateSchedulePresenceRule({ ...cur.data, ...clean });
       return rowResult(table(supabase, "schedules").update(clean).eq("id", schedule_id).select("*, subjects(*)").single());
     }
     case "delete_schedule_session": return rowResult(table(supabase, "schedules").delete().eq("id", args.schedule_id).select().single());
@@ -679,11 +700,13 @@ async function executeTool(name: string, args: any, supabase: any) {
         }
       }
       const { subject_name, subject_id, ...rest } = args || {};
-      // توحيد كل الحقول: الوقت (12/24 ساعة) + النوع (محاضرة/سكشن/أي) + الحضور (أونلاين/اوفلاين) + اللينك
+      // توحيد كل الحقول: الوقت (12/24 ساعة) + النوع (محاضرة/سكشن فقط) + الحضور (في الكلية/أونلاين فقط) + اللينك
       const row = normalizeScheduleFields(stripUndefined({ ...rest, subject_id: subjectId }), { requireTimes: true });
       if (!Number.isInteger(row.day_of_week) || row.day_of_week < 0 || row.day_of_week > 6) {
         throw new Error("day_of_week مطلوب ويجب أن يكون بين 0 (الأحد) و 6 (السبت)");
       }
+      // قاعدة النوعين: في الكلية ← المكان إلزامي، أونلاين ← اللينك اختياري
+      validateSchedulePresenceRule(row);
       const result = await table(supabase, "schedules").insert([row]).select("*, subjects(*)").single();
       if (result.error) throw result.error;
       return { content: [{ type: "text", text: JSON.stringify({ ...result.data, _subject_auto_created: subjectCreated, _message: subjectCreated ? "تم إنشاء المادة وإضافة الجلسة للجدول" : "تمت إضافة الجلسة للجدول" }, null, 2) }] };
@@ -868,7 +891,7 @@ async function handleJsonRpc(body: any, supabase: any, authCtx: { keyId?: string
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false }, resources: {}, prompts: {}, logging: {} },
-          serverInfo: { name: "student-management-mcp", version: "3.2.0" },
+          serverInfo: { name: "student-management-mcp", version: "3.4.0" },
         },
         id,
       });

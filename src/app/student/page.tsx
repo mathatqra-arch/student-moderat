@@ -413,7 +413,7 @@ function SessionCard({ session }: { session: any }) {
           </span>
           <span className={`brutal-badge ${isOnline ? "bg-green" : "bg-yellow"}`}>
             <LocIcon className="w-2.5 h-2.5" />
-            {isOnline ? "أونلاين" : (session.room || "كلية")}
+            {isOnline ? "أونلاين" : (session.room || "في الكلية")}
           </span>
           {hasOnlineLink && (
             <span className="brutal-badge bg-teal">

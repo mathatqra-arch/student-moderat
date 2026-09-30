@@ -6,7 +6,6 @@ import {
   BookOpen,
   Plus,
   Trash2,
-  Clock,
   Loader2,
   RefreshCw,
   MapPin,
@@ -18,14 +17,15 @@ import { formatTime12, sessionTypeLabel, sessionTypeBg, isSessionOnline } from "
 
 const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 // Groups removed
+// قاعدة النوعين — نوعين فقط: محاضرة / سكشن
+// (القيم القديمة المخزنة lab/exam تُعرض بعلامتها القديمة عبر sessionTypeLabel دون إمكانية إضافة جديدة)
 const TYPES = [
   { value: "lecture", label: "محاضرة", icon: BookOpen, color: "bg-blue" },
   { value: "tutorial", label: "سكشن", icon: Users, color: "bg-teal" },
-  { value: "lab", label: "معمل", icon: Users, color: "bg-purple-soft" },
-  { value: "exam", label: "امتحان", icon: Calendar, color: "bg-coral" },
 ];
+// نوعين فقط للحضور: في الكلية (اوفلاين) / أونلاين
 const MODES = [
-  { value: "university", label: "أوفلاين (كلية)", icon: MapPin, color: "bg-yellow" },
+  { value: "university", label: "في الكلية", icon: MapPin, color: "bg-yellow" },
   { value: "online", label: "أونلاين", icon: Video, color: "bg-green" },
 ];
 const HYBRID_FALLBACK = { value: "hybrid", label: "مختلط", icon: Video, color: "bg-teal" };
@@ -74,22 +74,25 @@ export default function ScheduleManager() {
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubject) return;
+    const trimmedRoom = newRoom.trim();
+    const isOnlineMode = newMode === "online";
+    // قاعدة النوعين: في الكلية ← المكان إلزامي · أونلاين ← اللينك اختياري (لو موجود)
+    if (!isOnlineMode && !trimmedRoom) return;
     setAdding(true);
     const supabase = createClient();
     const trimmedLink = newLink.trim();
-    const isOnlineMode = newMode === "online";
     // اللينك لازم يبدأ بـ https:// — والعنوان حقل حر (قاعة/مبنى)
-    const link = trimmedLink.startsWith("http") ? trimmedLink : null;
+    const link = isOnlineMode && trimmedLink.startsWith("http") ? trimmedLink : null;
     await supabase.from("schedules").insert([{
       subject_id: newSubject,
       day_of_week: newDay,
       start_time: newStart,
       end_time: newEnd,
-      room: newRoom || null,
+      room: trimmedRoom || null,
       link,
       type: newType,
       lecture_type: newMode,
-      location: isOnlineMode ? (newRoom || "أونلاين") : (newRoom || "الكلية"),
+      location: isOnlineMode ? "أونلاين" : (trimmedRoom || "الكلية"),
       is_active: true,
     }]);
     setNewRoom("");
@@ -195,11 +198,11 @@ export default function ScheduleManager() {
                 </div>
               </div>
 
-              {/* Row 3: Type + Mode */}
+              {/* Row 3: Type + Mode — قاعدة النوعين: محاضرة/سكشن + في الكلية/أونلاين */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-ink mb-1 block">النوع</label>
-                  <div className="grid grid-cols-4 gap-1.5">
+                  <label className="text-xs font-bold text-ink mb-1 block">النوع (نوعين بس)</label>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {TYPES.map((t) => {
                       const Icon = t.icon;
                       return (
@@ -207,7 +210,7 @@ export default function ScheduleManager() {
                           key={t.value}
                           type="button"
                           onClick={() => setNewType(t.value)}
-                          className={`flex flex-col items-center py-2 rounded-md border-2 text-2xs font-bold transition ${newType === t.value ? `border-ink ${t.color} shadow-brutal-sm` : "border-ink bg-cream-light text-gray"}`}
+                          className={`flex flex-col items-center py-2 rounded-md border-2 text-xs font-bold transition ${newType === t.value ? `border-ink ${t.color} shadow-brutal-sm` : "border-ink bg-cream-light text-gray"}`}
                         >
                           <Icon className="w-4 h-4 mb-0.5" />
                           {t.label}
@@ -217,7 +220,7 @@ export default function ScheduleManager() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-ink mb-1 block">الحضور</label>
+                  <label className="text-xs font-bold text-ink mb-1 block">الحضور (نوعين بس)</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {MODES.map((m) => {
                       const Icon = m.icon;
@@ -237,32 +240,36 @@ export default function ScheduleManager() {
                 </div>
               </div>
 
-              {/* Row 4: العنوان (الحضوري) + اللينك (الأونلاين) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Row 4: قاعدة الحضور — في الكلية ← المكان إلزامي · أونلاين ← اللينك اختياري */}
+              {newMode === "university" ? (
                 <div>
-                  <label className="text-xs font-bold text-ink mb-1 block">العنوان / القاعة {newMode === "online" ? "(اختياري)" : ""}</label>
+                  <label className="text-xs font-bold text-ink mb-1 block">
+                    المكان (القاعة / المبنى) <span className="text-coral">*</span>
+                  </label>
                   <input
                     type="text"
                     value={newRoom}
                     onChange={(e) => setNewRoom(e.target.value)}
-                    placeholder={newMode === "online" ? "مثال: أونلاين عبر Teams" : "قاعة 101"}
+                    required
+                    placeholder="مثال: قاعة 101 أو مبنى B"
                     className="brutal-input w-full px-3 py-2.5 text-sm"
                   />
+                  <p className="text-2xs text-gray font-bold mt-1">الحصة في الكلية — المكان إلزامي</p>
                 </div>
-                {newMode === "online" && (
-                  <div>
-                    <label className="text-xs font-bold text-ink mb-1 block">رابط الحصة (اللينك)</label>
-                    <input
-                      type="url"
-                      value={newLink}
-                      onChange={(e) => setNewLink(e.target.value)}
-                      placeholder="https://zoom.us/j/... أو https://meet.google.com/..."
-                      dir="ltr"
-                      className="brutal-input w-full px-3 py-2.5 text-sm text-left font-mono"
-                    />
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-bold text-ink mb-1 block">رابط الحصة (اللينك) — اختياري لو موجود</label>
+                  <input
+                    type="url"
+                    value={newLink}
+                    onChange={(e) => setNewLink(e.target.value)}
+                    placeholder="https://zoom.us/j/... أو https://meet.google.com/..."
+                    dir="ltr"
+                    className="brutal-input w-full px-3 py-2.5 text-sm text-left font-mono"
+                  />
+                  <p className="text-2xs text-gray font-bold mt-1">الحصة أونلاين — اللينك اختياري، لو متوفر الصقه هنا</p>
+                </div>
+              )}
 
               <button type="submit" disabled={adding} className="brutal-btn w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50">
                 {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}

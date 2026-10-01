@@ -37,6 +37,7 @@ interface AdminUser {
   role?: string;
   permissions?: Permissions;
   team_member_id?: string;
+  parent_id?: string | null;
   created_at: string;
   last_sign_in_at?: string;
 }
@@ -70,6 +71,10 @@ export default function TeamManager() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // بيانات الأدمن الحالي — لتحديد نطاق الواجهة:
+  // الأدمن الأساسي (leader) يشوف الكل، غيره يشوف نفسه والناس اللي ضافها بس
+  const [me, setMe] = useState<{ id: string; role: string; permissions: PermissionMap } | null>(null);
+
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState<AdminUser | null>(null);
@@ -93,7 +98,29 @@ export default function TeamManager() {
 
   useEffect(() => {
     fetchUsers();
+    fetchMe();
   }, []);
+
+  const fetchMe = async () => {
+    try {
+      const res = await fetch("/api/admin/me");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setMe({
+        id: data.id,
+        role: data.role,
+        permissions: normalizePermissions(data.permissions),
+      });
+    } catch {
+      // فشل تحميل البروفايل لا يمنع عرض القائمة
+    }
+  };
+
+  // نطاق الواجهة حسب دور وصلاحيات الحساب الحالي
+  const isLeader = me?.role === "leader";
+  const canCreateUsers = isLeader || !!me?.permissions?.team?.create;
+  const canEditUsers = isLeader || !!me?.permissions?.team?.edit;
+  const canDeleteUsers = isLeader || !!me?.permissions?.team?.delete;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -266,17 +293,25 @@ export default function TeamManager() {
             </div>
             <div>
               <h3 className="font-bold text-base">إدارة الفريق والأذونات</h3>
-              <p className="text-xs text-[rgb(var(--text-muted))]">المشرفون وصلاحياتهم</p>
+              <p className="text-xs text-[rgb(var(--text-muted))]">
+                {me
+                  ? isLeader
+                    ? "بتشوف كل الحسابات — أنت الأدمن الأساسي"
+                    : "بتشوف حسابك والحسابات اللي ضفتها تحتو بس"
+                  : "المشرفون وصلاحياتهم"}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-brand-600/20"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span className="hidden sm:inline">إضافة أدمن</span>
-            </button>
+            {canCreateUsers && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-brand-600/20"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">إضافة أدمن</span>
+              </button>
+            )}
             <button
               onClick={fetchUsers}
               disabled={loading}
@@ -336,27 +371,33 @@ export default function TeamManager() {
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => setShowPasswordModal(user)}
-                      title="تغيير كلمة المرور"
-                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition border border-amber-500/30"
-                    >
-                      <Key className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => openPermissionsModal(user)}
-                      title="تعديل الأذونات"
-                      className="p-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 transition border border-purple-500/30"
-                    >
-                      <Shield className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user)}
-                      title="حذف"
-                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition border border-rose-500/30"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canEditUsers && (
+                      <button
+                        onClick={() => setShowPasswordModal(user)}
+                        title="تغيير كلمة المرور"
+                        className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition border border-amber-500/30"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canEditUsers && user.id !== me?.id && (
+                      <button
+                        onClick={() => openPermissionsModal(user)}
+                        title="تعديل الأذونات"
+                        className="p-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 transition border border-purple-500/30"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canDeleteUsers && user.id !== me?.id && (
+                      <button
+                        onClick={() => handleDelete(user)}
+                        title="حذف"
+                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 transition border border-rose-500/30"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -431,7 +472,9 @@ export default function TeamManager() {
                   className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500"
                 >
                   <option value="assistant">مشرف مساعد</option>
-                  <option value="leader">ليدر رئيسي (كل الصلاحيات)</option>
+                  {isLeader && (
+                    <option value="leader">ليدر رئيسي (كل الصلاحيات)</option>
+                  )}
                 </select>
               </div>
 

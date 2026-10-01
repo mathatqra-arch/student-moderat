@@ -64,6 +64,64 @@ function normalizeEgyptianPhone(phone: string): string {
 // الأذونات الافتراضية والأذونات الكاملة للمشرف — من المصدر الموحد في lib/permissions
 // (DEFAULT_PERMISSIONS و LEADER_PERMISSIONS)
 
+// ==========================================
+// نطاق الرؤية الهرمي (hierarchy scoping):
+// - الأدمن الأساسي (leader): يشوف الكل
+// - باقي الأدمنة: يشوفوا نفسهم + الحسابات اللي ضافوها تحتو (سلسلة parent_id)
+// - الحساب بيتبوّى تحت اللي ضافه (parent_id) عند الإنشاء
+// ==========================================
+
+// كل أعضاء الفريق ضمن نسل عضو معيّن (نفسه + سلسلة parent_id بالكامل)
+function collectVisibleMemberIds(
+  selfMemberId: string | null,
+  members: Array<{ id: string; parent_id: string | null }>
+): Set<string> {
+  const visible = new Set<string>();
+  if (!selfMemberId) return visible;
+  visible.add(selfMemberId);
+
+  // خريطة: parent_id → قائمة الأبناء
+  const childrenOf = new Map<string, string[]>();
+  for (const m of members) {
+    if (m.parent_id) {
+      const arr = childrenOf.get(m.parent_id);
+      if (arr) arr.push(m.id);
+      else childrenOf.set(m.parent_id, [m.id]);
+    }
+  }
+
+  // BFS من نفسي لكل النسل
+  const queue = [selfMemberId];
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    for (const childId of childrenOf.get(current) || []) {
+      if (!visible.has(childId)) {
+        visible.add(childId);
+        queue.push(childId);
+      }
+    }
+  }
+  return visible;
+}
+
+// هل العضو الهدف ضمن نسل سلف معيّن؟ (نمشي لفوق في parent_id مع حماية من الحلقات)
+function isDescendantOf(
+  targetMemberId: string,
+  ancestorMemberId: string,
+  members: Array<{ id: string; parent_id: string | null }>
+): boolean {
+  const byId = new Map(members.map((m) => [m.id, m]));
+  let current = byId.get(targetMemberId);
+  const seen = new Set<string>();
+  while (current) {
+    if (current.id === ancestorMemberId) return true;
+    if (seen.has(current.id)) return false; // حلقة — نوقف
+    seen.add(current.id);
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return false;
+}
+
 // بوابة صلاحية موحدة — ترجع null لو مسموح، أو NextResponse 401/403 لو مرفوض
 async function requirePermission(resource: string, action: string) {
   const { user, profile, configError } = await getCurrentAdminCaller();
@@ -88,12 +146,13 @@ async function requirePermission(resource: string, action: string) {
   return { user, profile } as const;
 }
 
-// GET: قائمة الأدمن مع أذوناتهم
+// GET: قائمة الأدمن مع أذوناتهم — مُقيّدة حسب الـ hierarchy
 export async function GET() {
   try {
     const gate = await requirePermission("team", "view");
     if (gate instanceof NextResponse) return gate;
     const user = gate.user;
+    const profile = gate.profile;
 
     const adminClient = getAdminClient();
 
@@ -113,9 +172,17 @@ export async function GET() {
 
     if (teamError) throw teamError;
 
+    const members = teamMembers || [];
+
+    // نطاق الرؤية: leader يشوف الكل، غيره يشوف نفسه + الناس اللي ضافهم تحتو
+    let visibleMemberIds: Set<string> | null = null;
+    if (profile.role !== "leader") {
+      visibleMemberIds = collectVisibleMemberIds(profile.teamMemberId, members);
+    }
+
     // دمج البيانات
     const users = (usersData.users || []).map((u) => {
-      const teamMember = teamMembers?.find((tm) => tm.user_id === u.id);
+      const teamMember = members.find((tm) => tm.user_id === u.id);
       return {
         id: u.id,
         phone: u.phone,
@@ -126,11 +193,17 @@ export async function GET() {
         role: teamMember?.role || null,
         permissions: teamMember?.permissions || null,
         team_member_id: teamMember?.id || null,
+        parent_id: teamMember?.parent_id || null,
       };
     });
 
+    // فلترة حسب النطاق (غير الليدر): فقط أعضاء الفريق ضمن نسلِه
+    const scopedUsers = visibleMemberIds
+      ? users.filter((u) => u.team_member_id && visibleMemberIds!.has(u.team_member_id))
+      : users;
+
     // رتّب: team_members الأول، ثم الباقي
-    const sortedUsers = users.sort((a, b) => {
+    const sortedUsers = scopedUsers.sort((a, b) => {
       if (a.team_member_id && !b.team_member_id) return -1;
       if (!a.team_member_id && b.team_member_id) return 1;
       return 0;
@@ -149,6 +222,7 @@ export async function POST(request: Request) {
     const gate = await requirePermission("team", "create");
     if (gate instanceof NextResponse) return gate;
     const user = gate.user;
+    const profile = gate.profile;
 
     const body = await request.json();
     const { name, phone, role, password, permissions } = body;
@@ -164,6 +238,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" },
         { status: 400 }
+      );
+    }
+
+    // منع غير الأدمن الأساسي من إنشاء حسابات leader (تثبيت للصلاحيات)
+    if (role === "leader" && profile.role !== "leader") {
+      return NextResponse.json(
+        { error: "مسموح فقط للأدمن الأساسي بإنشاء حسابات leader" },
+        { status: 403 }
       );
     }
 
@@ -195,7 +277,7 @@ export async function POST(request: Request) {
       throw new Error(createError?.message || "فشل إنشاء المستخدم");
     }
 
-    // 2. إضافته لجدول team_members مع الأذونات
+    // 2. إضافته لجدول team_members مع الأذونات — مربوط تحت اللي ضافه (parent_id)
     const userPermissions =
       role === "leader"
         ? LEADER_PERMISSIONS
@@ -209,6 +291,7 @@ export async function POST(request: Request) {
           name: name.trim(),
           role: role || "assistant",
           permissions: userPermissions,
+          parent_id: profile.teamMemberId,
         },
       ]);
 
@@ -235,6 +318,7 @@ export async function PUT(request: Request) {
     const gate = await requirePermission("team", "edit");
     if (gate instanceof NextResponse) return gate;
     const user = gate.user;
+    const profile = gate.profile;
 
     const body = await request.json();
     const { user_id, password, permissions, role, name } = body;
@@ -244,6 +328,58 @@ export async function PUT(request: Request) {
     }
 
     const adminClient = getAdminClient();
+
+    // حماية النطاق: غير الليدر يعدّل نفسه (بدون دور/صلاحيات) أو نسلِه فقط
+    if (profile.role !== "leader") {
+      const { data: targetMember } = await adminClient
+        .from("team_members")
+        .select("id, user_id, parent_id")
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      if (!targetMember) {
+        return NextResponse.json(
+          { error: "الحساب ده مش موجود في فريق الإدارة" },
+          { status: 403 }
+        );
+      }
+
+      if (targetMember.user_id === profile.userId) {
+        // تعديل النفس: الاسم وكلمة المرور بس — الدور والصلاحيات للأدمن الأساسي
+        if (permissions || role) {
+          return NextResponse.json(
+            { error: "مش تقدر تغيّر دورك أو صلاحياتك بنفسك — كلم الأدمن الأساسي" },
+            { status: 400 }
+          );
+        }
+      } else {
+        if (!profile.teamMemberId) {
+          return NextResponse.json(
+            { error: "حسابك غير مرتبط بفريق الإدارة" },
+            { status: 403 }
+          );
+        }
+        const { data: allMembers } = await adminClient
+          .from("team_members")
+          .select("id, parent_id");
+        if (
+          !isDescendantOf(targetMember.id, profile.teamMemberId, allMembers || [])
+        ) {
+          return NextResponse.json(
+            { error: "الحساب ده مش من الحسابات اللي ضفتها — مش مسموح تعدّله" },
+            { status: 403 }
+          );
+        }
+      }
+
+      // غير الليدر ممنوع يعيّن أحد leader
+      if (role === "leader") {
+        return NextResponse.json(
+          { error: "مسموح فقط للأدمن الأساسي بتعيين دور leader" },
+          { status: 403 }
+        );
+      }
+    }
 
     // 1. تحديث كلمة المرور إن وُجدت
     if (password) {
@@ -307,6 +443,7 @@ export async function DELETE(request: Request) {
     const gate = await requirePermission("team", "delete");
     if (gate instanceof NextResponse) return gate;
     const user = gate.user;
+    const profile = gate.profile;
 
     const body = await request.json();
     const { user_id } = body;
@@ -327,9 +464,26 @@ export async function DELETE(request: Request) {
     // التحقق من عدم حذف الـ leader الأخير
     const { data: targetMember } = await adminClient
       .from("team_members")
-      .select("role")
+      .select("id, role, parent_id")
       .eq("user_id", user_id)
       .single();
+
+    // حماية النطاق: غير الليدر يحذف من ضمن الحسابات اللي ضافها تحتو فقط
+    if (profile.role !== "leader") {
+      const { data: allMembers } = await adminClient
+        .from("team_members")
+        .select("id, parent_id");
+      if (
+        !targetMember ||
+        !profile.teamMemberId ||
+        !isDescendantOf(targetMember.id, profile.teamMemberId, allMembers || [])
+      ) {
+        return NextResponse.json(
+          { error: "الحساب ده مش من الحسابات اللي ضفتها — مش مسموح تحذفه" },
+          { status: 403 }
+        );
+      }
+    }
 
     if (targetMember?.role === "leader") {
       const { count } = await adminClient

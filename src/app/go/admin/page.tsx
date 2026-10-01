@@ -20,6 +20,7 @@ import TeamManager from "@/components/admin/TeamManager";
 import ApiKeyManager from "@/components/admin/ApiKeyManager";
 import ScheduleManager from "@/components/admin/ScheduleManager";
 import QuickLinksManager from "@/components/admin/QuickLinksManager";
+import SelfPasswordModal from "@/components/admin/SelfPasswordModal";
 import Link from "next/link";
 import { hasPermission, PermissionMap } from "@/lib/permissions";
 
@@ -56,6 +57,8 @@ export default function AdminDashboardPage() {
   const [me, setMe] = useState<MeInfo | null>(null);
   const [meLoading, setMeLoading] = useState(true);
   const [meError, setMeError] = useState<string | null>(null);
+  // تغيير كلمة المرور الذاتي — متاح لأي عضو مسجل دخول بدون صلاحيات
+  const [showSelfPasswordModal, setShowSelfPasswordModal] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -183,6 +186,13 @@ export default function AdminDashboardPage() {
 
             {/* Actions */}
             <div className="space-y-2 pt-4 border-t-2 border-ink">
+              <button
+                onClick={() => setShowSelfPasswordModal(true)}
+                className="brutal-btn-ghost w-full py-2.5 px-3 flex items-center justify-center gap-2 text-xs"
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>تغيير كلمة المرور</span>
+              </button>
               <Link
                 href="/student"
                 target="_blank"
@@ -214,6 +224,13 @@ export default function AdminDashboardPage() {
               {me.name && (
                 <span className="text-2xs font-bold text-gray mr-auto truncate max-w-[120px]">{me.name}</span>
               )}
+              <button
+                onClick={() => setShowSelfPasswordModal(true)}
+                title="تغيير كلمة المرور"
+                className={`p-1.5 rounded-lg border-2 border-ink bg-yellow shadow-brutal-sm flex-shrink-0 ${me.name ? "" : "mr-auto"}`}
+              >
+                <Key className="w-4 h-4 text-ink" />
+              </button>
             </div>
           </header>
 
@@ -280,6 +297,11 @@ export default function AdminDashboardPage() {
           })}
         </div>
       </nav>
+
+      {/* مودال تغيير كلمة المرور الذاتي — لكل الأعضاء */}
+      {showSelfPasswordModal && (
+        <SelfPasswordModal onClose={() => setShowSelfPasswordModal(false)} />
+      )}
     </div>
   );
 }

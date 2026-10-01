@@ -22,6 +22,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { friendlyError } from "@/lib/friendly-error";
 import {
   RESOURCES,
   DEFAULT_PERMISSIONS,
@@ -44,23 +45,6 @@ interface AdminUser {
 
 // نموذج الصلاحيات الكامل — من المصدر الموحد (يطابق قاعدة البيانات)
 type Permissions = PermissionMap;
-
-// رسائل خطأ واضحة للمستخدم:
-// - أخطاء الشبكة (انقطاع إنترنت / DNS) تظهر للمتصفح كـ TypeError: Failed to fetch
-// - أخطاء الـ API تصل في data.error بالعربي من السيرفر — لازم تظهر كما هي
-function friendlyError(err: any): string {
-  const msg = err?.message || "";
-  if (
-    err instanceof TypeError ||
-    msg === "Failed to fetch" ||
-    msg === "NetworkError when attempting to fetch resource." ||
-    msg.includes("ERR_NAME") ||
-    msg.includes("NetworkError")
-  ) {
-    return "تعذر الاتصال بالسيرفر — تأكد من اتصالك بالإنترنت وحاول تاني";
-  }
-  return msg || "حدث خطأ غير متوقع";
-}
 
 // تسميات كل مجموعات الصلاحيات — من المصدر الموحد RESOURCES في lib/permissions
 // (13 مجموعة شاملة: استفسارات، إعلانات، تكليفات، جداول، مواد، تواريخ، تسليمات، حضور، روابط، فريق، مفاتيح، MCP، إعدادات)

@@ -94,6 +94,43 @@ export async function POST(request: Request) {
       );
     }
 
+    // أمان: التحقق من كلمة المرور الحالية قبل التغيير —
+    // أي جلسة مسروقة/جهاز مفتوح لا يستطيع تغيير كلمة المرور بدون معرفتها
+    // استثناء واحد: أول تعيين بعد OTP (needs_password_change) — مفيش كلمة مرور فعلية لسه
+    const firstTimeSetup = user.user_metadata?.needs_password_change === true;
+
+    if (!firstTimeSetup) {
+      if (!current_password || typeof current_password !== "string") {
+        return NextResponse.json(
+          { error: "اكتب كلمة المرور الحالية أولاً" },
+          { status: 400 }
+        );
+      }
+
+      if (!user.phone) {
+        return NextResponse.json(
+          { error: "لا يمكن التحقق من هويتك — الحساب غير مرتبط برقم هاتف" },
+          { status: 400 }
+        );
+      }
+
+      // تحقق صامت: تسجيل دخول مؤقت برقم الهاتف + كلمة المرور الحالية (بدون حفظ جلسة)
+      const verifyClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { error: verifyError } = await verifyClient.auth.signInWithPassword({
+        phone: user.phone,
+        password: current_password,
+      });
+
+      if (verifyError) {
+        return NextResponse.json(
+          { error: "كلمة المرور الحالية غير صحيحة" },
+          { status: 400 }
+        );
+      }
+    }
+
     const adminClient = getAdminClient();
 
     // تحديث كلمة المرور + إزالة علامة needs_password_change
@@ -113,9 +150,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // تحديث password_changed_at في team_members للاتساق مع مسار الأدمن
+    await adminClient
+      .from("team_members")
+      .update({ password_changed_at: new Date().toISOString() })
+      .eq("user_id", user.id);
+
     return NextResponse.json({
       ok: true,
-      message: "تم تعيين كلمة المرور بنجاح. ستستخدمها في المرات القادمة مع رقم هاتفك.",
+      message: "تم تغيير كلمة المرور بنجاح. استخدمها في المرات القادمة مع رقم هاتفك.",
     });
   } catch (error: any) {
     console.error("Password set error:", error);

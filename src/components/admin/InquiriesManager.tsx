@@ -215,7 +215,7 @@ export default function InquiriesManager() {
                   <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                   <span>اقتراح رد الذكاء الاصطناعي (MCP Suggested Reply):</span>
                 </div>
-                <p className="text-xs text-purple-200/90">{inquiry.ai_suggestion}</p>
+                <p className="text-xs text-purple-300">{inquiry.ai_suggestion}</p>
               </div>
             )}
 

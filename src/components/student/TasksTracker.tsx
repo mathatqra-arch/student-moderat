@@ -128,7 +128,7 @@ export default function TasksTracker() {
               className="glass-card p-4 rounded-2xl space-y-3 border border-gray-800/80 hover:border-blue-500/30 transition"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-600/20 text-blue-300 border border-blue-500/30">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-600/20 text-blue-500 border border-blue-500/30">
                   {task.subject}
                 </span>
 

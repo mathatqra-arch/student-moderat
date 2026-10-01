@@ -257,9 +257,9 @@
     box-shadow: none;
   }
 
-  /* Button — ghost */
+  /* Button — ghost — خلفية شفافة ونص غامق (ممنوع خلفية غامقة هنا: النص ink هيختفي) */
   .brutal-btn-ghost {
-    background: rgb(45 45 45);
+    background: transparent;
     color: var(--ink);
     font-weight: 700;
     border: var(--border-thick) solid var(--ink);
@@ -557,6 +557,13 @@
   .text-rose-300, .text-rose-400 { color: var(--coral) !important; }
   .text-amber-400 { color: var(--yellow-dark) !important; }
   .text-purple-300, .text-purple-400 { color: var(--purple-dark) !important; }
+  /* شبكة أمان — بقايا الثيم الغامق: درجات فاتحة على خلفيات فاتحة = نص مش باين */
+  .text-purple-50, .text-purple-100, .text-purple-200 { color: var(--purple-dark) !important; }
+  .text-blue-50, .text-blue-100, .text-blue-200, .text-blue-300 { color: var(--blue-dark) !important; }
+  .text-emerald-50, .text-emerald-100, .text-emerald-200 { color: var(--teal-dark) !important; }
+  .text-teal-50, .text-teal-100, .text-teal-200, .text-teal-300 { color: var(--teal-dark) !important; }
+  .text-rose-50, .text-rose-100, .text-rose-200 { color: var(--coral) !important; }
+  .text-amber-50, .text-amber-100, .text-amber-200, .text-amber-300 { color: var(--yellow-dark) !important; }
 
   /* Borders */
   .border-gray-700, .border-gray-800 { border-color: var(--gray-lighter) !important; }

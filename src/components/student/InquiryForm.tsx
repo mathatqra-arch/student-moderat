@@ -77,13 +77,13 @@ export default function InquiryForm() {
         <div className="bg-emerald-950/60 border border-emerald-500/40 p-5 rounded-xl text-center space-y-3 animate-fade-in">
           <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
           <h3 className="font-bold text-emerald-300 text-lg">تم إرسال استفسارك بنجاح!</h3>
-          <p className="text-xs text-emerald-200/80">
+          <p className="text-xs text-emerald-300">
             رقم تتبع الطلب الخاص بك: <span className="font-mono font-bold text-white bg-emerald-900/60 px-2 py-1 rounded border border-emerald-500/30">{submittedId}</span>
           </p>
           <p className="text-xs text-gray-400">سيقوم ليدر الدفعة أو المشرف المساعد بمراجعة الطلب والتواصل معك عبر الواتساب فوراً.</p>
           <button
             onClick={() => setSubmittedId(null)}
-            className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline font-medium"
+            className="mt-2 text-xs text-blue-400 hover:text-blue-500 underline font-medium"
           >
             تقديم استفسار آخر
           </button>
@@ -131,7 +131,7 @@ export default function InquiryForm() {
                   onClick={() => setCategory(cat)}
                   className={`py-2 text-xs font-medium rounded-xl border transition ${
                     category === cat
-                      ? "bg-blue-600/30 text-blue-300 border-blue-500"
+                      ? "bg-blue-600/30 text-blue-500 border-blue-500"
                       : "bg-gray-900/50 text-gray-400 border-gray-800 hover:bg-gray-800"
                   }`}
                 >

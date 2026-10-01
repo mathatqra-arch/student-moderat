@@ -671,7 +671,7 @@ export default function TeamManager() {
           </div>
         </div>
 
-        <div className="flex items-start gap-2 text-[11px] text-purple-200/70 bg-purple-950/30 p-2.5 rounded-xl border border-purple-500/20">
+        <div className="flex items-start gap-2 text-[11px] text-purple-300 bg-purple-950/30 p-2.5 rounded-xl border border-purple-500/20">
           <Sparkles className="w-3.5 h-3.5 text-purple-400 mt-0.5 flex-shrink-0" />
           <span>
             خادم MCP لربط ChatGPT/Claude. أنشئ مفتاح API من تبويب "مفاتيح API".

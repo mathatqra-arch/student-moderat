@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Inquiry } from "@/types/database";
-import { MessageSquare, Phone, CheckCircle, Clock, Archive, Sparkles, Filter } from "lucide-react";
+import { MessageSquare, Phone, CheckCircle, Clock, Archive, Sparkles, Filter, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { whatsappChatUrl, whatsappDirectChatUrl, buildInquiryReplyMessage, isDesktopDevice } from "@/lib/whatsapp";
+import { whatsappChatUrl, whatsappDirectChatUrl, buildInquiryReplyMessage, isDesktopDevice, isValidWhatsappNumber } from "@/lib/whatsapp";
 
 const defaultInquiries: Inquiry[] = [
   {
@@ -135,25 +135,45 @@ export default function InquiriesManager() {
 
       {/* Inquiries Cards */}
       <div className="space-y-3">
-        {filteredInquiries.map((inquiry) => (
+        {filteredInquiries.map((inquiry) => {
+          const waValid = isValidWhatsappNumber(inquiry.whatsapp_number);
+          const directChatHref = waValid ? whatsappDirectChatUrl(inquiry.whatsapp_number, { preferWeb }) : "";
+          const messageChatHref = waValid
+            ? whatsappChatUrl(inquiry.whatsapp_number, buildInquiryReplyMessage(inquiry), { preferWeb })
+            : "";
+          return (
           <div
             key={inquiry.id}
             className="glass-card p-5 rounded-2xl border border-gray-800 space-y-3 relative hover:border-blue-500/30 transition"
           >
             <div className="flex items-center justify-between gap-2 border-b border-gray-800/80 pb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* الدوس على اسم الطالب يفتح شات واتساب معاه علطول */}
-                <a
-                  href={whatsappDirectChatUrl(inquiry.whatsapp_number, { preferWeb })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="فتح شات واتساب مع الطالب فوراً"
-                  className="font-bold text-gray-100 text-base hover:text-emerald-400 transition underline decoration-emerald-500/40 decoration-dotted underline-offset-4"
-                >
-                  {inquiry.full_name}
-                </a>
+                {waValid ? (
+                  <a
+                    href={directChatHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="فتح شات واتساب مع الطالب فوراً"
+                    className="font-bold text-gray-100 text-base hover:text-emerald-400 transition underline decoration-emerald-500/40 decoration-dotted underline-offset-4"
+                  >
+                    {inquiry.full_name}
+                  </a>
+                ) : (
+                  <span
+                    title={`الرقم غير صالح للواتساب: ${inquiry.whatsapp_number || "فارغ"}`}
+                    className="font-bold text-gray-100 text-base inline-flex items-center gap-1.5 cursor-not-allowed"
+                  >
+                    {inquiry.full_name}
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  </span>
+                )}
                 <span className="text-xs px-2 py-0.5 rounded-lg bg-gray-800 text-blue-400 border border-gray-700">
                   {inquiry.category}
+                </span>
+                {/* الرقم كما حُفظ — للتشخيص السريع */}
+                <span dir="ltr" className="text-2xs text-gray-500 font-mono">
+                  {inquiry.whatsapp_number || "لا يوجد رقم"}
                 </span>
               </div>
               {getStatusBadge(inquiry.status)}
@@ -180,15 +200,25 @@ export default function InquiriesManager() {
 
               <div className="flex items-center gap-2">
                 {/* WhatsApp Direct Chat Button — يفتح الشات مع الطالب علطول برسالة مثبتة تتضمن مشكلته والرد */}
-                <a
-                  href={whatsappChatUrl(inquiry.whatsapp_number, buildInquiryReplyMessage(inquiry), { preferWeb })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition shadow-sm shadow-emerald-600/20"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>مراسلة عبر الواتساب</span>
-                </a>
+                {waValid ? (
+                  <a
+                    href={messageChatHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition shadow-sm shadow-emerald-600/20"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>مراسلة عبر الواتساب</span>
+                  </a>
+                ) : (
+                  <span
+                    title={`مش رقم واتساب صالح: ${inquiry.whatsapp_number || "فارغ"}`}
+                    className="px-3 py-1.5 rounded-xl bg-gray-800 text-gray-500 font-semibold flex items-center gap-1.5 cursor-not-allowed"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>رقم غير صالح</span>
+                  </span>
+                )}
 
                 {/* Status Dropdown */}
                 <select
@@ -204,7 +234,8 @@ export default function InquiriesManager() {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

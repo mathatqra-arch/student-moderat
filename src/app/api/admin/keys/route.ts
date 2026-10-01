@@ -3,6 +3,34 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import crypto from "crypto";
+import { getCurrentAdminCaller, profileCan } from "@/lib/admin-permissions";
+
+// بوابة صلاحية موحدة — ترجع NextResponse لو مرفوض، أو بيانات المستخدم لو مسموح
+async function requirePermission(resource: string, action: string) {
+  const { user, profile, configError } = await getCurrentAdminCaller();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
+      { status: 401 }
+    );
+  }
+  if (configError) {
+    return NextResponse.json({ error: configError }, { status: 500 });
+  }
+  if (!profile) {
+    return NextResponse.json(
+      { error: "حسابك غير مرتبط بفريق الإدارة" },
+      { status: 403 }
+    );
+  }
+  if (!profileCan(profile, resource, action)) {
+    return NextResponse.json(
+      { error: "معندكش صلاحية للعملية دي — كلم الليدر المسؤول" },
+      { status: 403 }
+    );
+  }
+  return { user } as const;
+}
 
 // ==========================================
 // API Keys Management - محمي بـ Supabase Auth
@@ -52,13 +80,9 @@ async function getAuthenticatedUser() {
 // GET: استرجاع كل المفاتيح (بدون قيمة كاملة)
 export async function GET() {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
-    }
+    const gate = await requirePermission("api_keys", "view");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const supabase = getSupabaseAdminClient();
     const { data, error } = await supabase
@@ -77,13 +101,9 @@ export async function GET() {
 // POST: توليد مفتاح API جديد
 export async function POST(request: Request) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
-    }
+    const gate = await requirePermission("api_keys", "create");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const { name } = await request.json();
     if (!name || !name.trim()) {
@@ -130,13 +150,9 @@ export async function POST(request: Request) {
 // DELETE: حذف مفتاح
 export async function DELETE(request: Request) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: تسجيل دخول الأدمن مطلوب" },
-        { status: 401 }
-      );
-    }
+    const gate = await requirePermission("api_keys", "delete");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const { id } = await request.json();
     if (!id) {

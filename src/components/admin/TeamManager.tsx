@@ -22,6 +22,12 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import {
+  RESOURCES,
+  DEFAULT_PERMISSIONS,
+  normalizePermissions,
+  PermissionMap,
+} from "@/lib/permissions";
 
 interface AdminUser {
   id: string;
@@ -35,25 +41,8 @@ interface AdminUser {
   last_sign_in_at?: string;
 }
 
-interface Permissions {
-  inquiries: { view: boolean; reply: boolean; delete: boolean };
-  announcements: { view: boolean; create: boolean; edit: boolean; delete: boolean };
-  tasks: { view: boolean; create: boolean; edit: boolean; delete: boolean };
-  team: { view: boolean; create: boolean; edit: boolean; delete: boolean };
-  api_keys: { view: boolean; create: boolean; delete: boolean };
-  mcp: { view: boolean; test: boolean };
-  settings: { view: boolean; edit: boolean };
-}
-
-const DEFAULT_PERMISSIONS: Permissions = {
-  inquiries: { view: true, reply: true, delete: false },
-  announcements: { view: true, create: true, edit: true, delete: false },
-  tasks: { view: true, create: true, edit: true, delete: false },
-  team: { view: true, create: false, edit: false, delete: false },
-  api_keys: { view: false, create: false, delete: false },
-  mcp: { view: false, test: false },
-  settings: { view: false, edit: false },
-};
+// نموذج الصلاحيات الكامل — من المصدر الموحد (يطابق قاعدة البيانات)
+type Permissions = PermissionMap;
 
 // رسائل خطأ واضحة للمستخدم:
 // - أخطاء الشبكة (انقطاع إنترنت / DNS) تظهر للمتصفح كـ TypeError: Failed to fetch
@@ -72,65 +61,8 @@ function friendlyError(err: any): string {
   return msg || "حدث خطأ غير متوقع";
 }
 
-const PERMISSION_LABELS: Record<string, { label: string; actions: { key: string; label: string }[] }> = {
-  inquiries: {
-    label: "الاستفسارات",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "reply", label: "رد" },
-      { key: "delete", label: "حذف" },
-    ],
-  },
-  announcements: {
-    label: "الإعلانات",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "create", label: "إنشاء" },
-      { key: "edit", label: "تعديل" },
-      { key: "delete", label: "حذف" },
-    ],
-  },
-  tasks: {
-    label: "التكليفات",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "create", label: "إنشاء" },
-      { key: "edit", label: "تعديل" },
-      { key: "delete", label: "حذف" },
-    ],
-  },
-  team: {
-    label: "الفريق",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "create", label: "إضافة" },
-      { key: "edit", label: "تعديل" },
-      { key: "delete", label: "حذف" },
-    ],
-  },
-  api_keys: {
-    label: "مفاتيح API",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "create", label: "إنشاء" },
-      { key: "delete", label: "حذف" },
-    ],
-  },
-  mcp: {
-    label: "خادم MCP",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "test", label: "اختبار" },
-    ],
-  },
-  settings: {
-    label: "الإعدادات",
-    actions: [
-      { key: "view", label: "عرض" },
-      { key: "edit", label: "تعديل" },
-    ],
-  },
-};
+// تسميات كل مجموعات الصلاحيات — من المصدر الموحد RESOURCES في lib/permissions
+// (13 مجموعة شاملة: استفسارات، إعلانات، تكليفات، جداول، مواد، تواريخ، تسليمات، حضور، روابط، فريق، مفاتيح، MCP، إعدادات)
 
 export default function TeamManager() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -294,7 +226,8 @@ export default function TeamManager() {
 
   const openPermissionsModal = (user: AdminUser) => {
     setShowPermissionsModal(user);
-    setEditPermissions(user.permissions || DEFAULT_PERMISSIONS);
+    // ندمج الصلاحيات المحفوظة فوق القالب الافتراضي — يملأ أي مجموعات ناقصة (حسابات قديمة)
+    setEditPermissions(normalizePermissions(user.permissions));
   };
 
   const togglePermission = (resource: string, action: string) => {
@@ -622,7 +555,7 @@ export default function TeamManager() {
             )}
 
             <form onSubmit={handleSavePermissions} className="space-y-3">
-              {Object.entries(PERMISSION_LABELS).map(([resource, config]) => (
+              {Object.entries(RESOURCES).map(([resource, config]) => (
                 <div key={resource} className="bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl p-3">
                   <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
                     <Lock className="w-3 h-3 text-brand-500" />

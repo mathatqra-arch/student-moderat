@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Shield,
   MessageSquare,
@@ -11,6 +11,8 @@ import {
   ExternalLink,
   Calendar,
   Link2,
+  Loader2,
+  ShieldAlert,
 } from "lucide-react";
 import InquiriesManager from "@/components/admin/InquiriesManager";
 import ContentManager from "@/components/admin/ContentManager";
@@ -19,6 +21,7 @@ import ApiKeyManager from "@/components/admin/ApiKeyManager";
 import ScheduleManager from "@/components/admin/ScheduleManager";
 import QuickLinksManager from "@/components/admin/QuickLinksManager";
 import Link from "next/link";
+import { hasPermission, PermissionMap } from "@/lib/permissions";
 
 type TabId = "inquiries" | "content" | "schedules" | "links" | "team" | "keys";
 
@@ -28,21 +31,110 @@ interface TabConfig {
   shortLabel: string;
   icon: typeof MessageSquare;
   color: string;
+  /** الموارد اللي بتحدد ظهور التاب — التاب يظهر لو أي مورد منهم عليه view */
+  resources: string[];
 }
 
 const TABS: TabConfig[] = [
-  { id: "inquiries", label: "الاستفسارات", shortLabel: "استفسارات", icon: MessageSquare, color: "bg-coral" },
-  { id: "content", label: "الإعلانات والتكليفات", shortLabel: "محتوى", icon: FileText, color: "bg-blue" },
-  { id: "schedules", label: "الجداول والمواد", shortLabel: "جداول", icon: Calendar, color: "bg-green" },
-  { id: "links", label: "الروابط السريعة", shortLabel: "روابط", icon: Link2, color: "bg-teal" },
-  { id: "keys", label: "مفاتيح API", shortLabel: "مفاتيح", icon: Key, color: "bg-purple-soft" },
-  { id: "team", label: "الفريق والصلاحيات", shortLabel: "فريق", icon: Users, color: "bg-yellow" },
+  { id: "inquiries", label: "الاستفسارات", shortLabel: "استفسارات", icon: MessageSquare, color: "bg-coral", resources: ["inquiries"] },
+  { id: "content", label: "الإعلانات والتكليفات", shortLabel: "محتوى", icon: FileText, color: "bg-blue", resources: ["announcements", "tasks"] },
+  { id: "schedules", label: "الجداول والمواد", shortLabel: "جداول", icon: Calendar, color: "bg-green", resources: ["schedules", "subjects", "important_dates"] },
+  { id: "links", label: "الروابط السريعة", shortLabel: "روابط", icon: Link2, color: "bg-teal", resources: ["links"] },
+  { id: "keys", label: "مفاتيح API", shortLabel: "مفاتيح", icon: Key, color: "bg-purple-soft", resources: ["api_keys"] },
+  { id: "team", label: "الفريق والصلاحيات", shortLabel: "فريق", icon: Users, color: "bg-yellow", resources: ["team"] },
 ];
+
+interface MeInfo {
+  id: string;
+  name?: string | null;
+  role: string;
+  permissions: PermissionMap;
+}
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<TabId>("inquiries");
+  const [me, setMe] = useState<MeInfo | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
+  const [meError, setMeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/me");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "فشل تحميل الصلاحيات");
+        if (mounted) setMe(data);
+      } catch (err: any) {
+        if (mounted) setMeError(err?.message || "فشل تحميل الصلاحيات");
+      } finally {
+        if (mounted) setMeLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // هل التاب ظاهر للمستخدم الحالي؟ (الـ leader يشوف كل شيء)
+  const tabVisible = (id: TabId): boolean => {
+    if (!me) return false;
+    if (me.role === "leader") return true;
+    const config = TABS.find((t) => t.id === id);
+    if (!config) return false;
+    return config.resources.some((res) => hasPermission(me.permissions, res, "view", me.role));
+  };
+
+  const visibleTabs = TABS.filter((t) => tabVisible(t.id));
+
+  // لو التاب النشط اتشال (بعد تحميل الصلاحيات) → رجّع لأول تاب متاح
+  useEffect(() => {
+    if (!meLoading && me && visibleTabs.length > 0) {
+      setActiveTab((current) =>
+        visibleTabs.some((t) => t.id === current) ? current : visibleTabs[0].id
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meLoading, me]);
 
   const activeTabConfig = TABS.find((t) => t.id === activeTab);
+
+  // شاشة تحميل الصلاحيات — ممنوع نعرض أي تاب قبل معرفة صلاحيات المستخدم
+  if (meLoading) {
+    return (
+      <div className="min-h-screen bg-cream text-ink flex items-center justify-center">
+        <div className="flex items-center gap-2 text-sm font-bold text-gray">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          جاري تحميل لوحة التحكم...
+        </div>
+      </div>
+    );
+  }
+
+  // خطأ في جلب الصلاحيات أو مستخدم بدون أي صلاحيات
+  if (meError || !me || visibleTabs.length === 0) {
+    return (
+      <div className="min-h-screen bg-cream text-ink flex items-center justify-center p-4">
+        <div className="brutal-card bg-cream-light p-8 max-w-sm w-full text-center space-y-4">
+          <div className="w-14 h-14 rounded-xl border-2 border-ink bg-coral flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-7 h-7 text-cream-light" />
+          </div>
+          <h1 className="font-extrabold text-lg">مش مسموح لك بالدخول</h1>
+          <p className="text-xs text-gray leading-relaxed">
+            {meError
+              ? "حصلت مشكلة في التحقق من صلاحياتك. تأكد من اتصالك وحاول تاني."
+              : "حسابك معندوش أي صلاحيات على لوحة التحكم. كلم الليدر المسؤول يمنحك الصلاحيات المناسبة."}
+          </p>
+          <Link
+            href="/go/admin/login"
+            className="block w-full py-2.5 px-3 text-xs font-bold border-2 border-ink rounded-md bg-yellow hover:bg-coral hover:text-cream-light transition"
+          >
+            رجوع لتسجيل الدخول
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-cream text-ink relative overflow-hidden">
@@ -62,14 +154,16 @@ export default function AdminDashboardPage() {
                 <h1 className="font-extrabold text-base tracking-tight text-ink">لوحة الأدمن</h1>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-green border border-ink" />
-                  <span className="text-2xs font-bold text-gray">إشراف نشط</span>
+                  <span className="text-2xs font-bold text-gray truncate max-w-[130px]">
+                    {me.name || (me.role === "leader" ? "ليدر رئيسي" : "مشرف مساعد")}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Nav */}
+            {/* Nav — التابات حسب صلاحيات المستخدم فقط */}
             <nav className="space-y-1.5 flex-1">
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
@@ -117,6 +211,9 @@ export default function AdminDashboardPage() {
                 <Shield className="w-4 h-4 text-ink" />
               </div>
               <h1 className="font-extrabold text-sm text-ink">لوحة الأدمن</h1>
+              {me.name && (
+                <span className="text-2xs font-bold text-gray mr-auto truncate max-w-[120px]">{me.name}</span>
+              )}
             </div>
           </header>
 
@@ -143,24 +240,27 @@ export default function AdminDashboardPage() {
                 </h2>
               </div>
 
-              {/* Tab content */}
+              {/* Tab content — بيتعرض فقط لو التاب مسموح لصلاحيات المستخدم */}
               <div key={activeTab} className="tab-content">
-                {activeTab === "inquiries" && <InquiriesManager />}
-                {activeTab === "content" && <ContentManager />}
-                {activeTab === "schedules" && <ScheduleManager />}
-                {activeTab === "links" && <QuickLinksManager />}
-                {activeTab === "keys" && <ApiKeyManager />}
-                {activeTab === "team" && <TeamManager />}
+                {activeTab === "inquiries" && tabVisible("inquiries") && <InquiriesManager />}
+                {activeTab === "content" && tabVisible("content") && <ContentManager />}
+                {activeTab === "schedules" && tabVisible("schedules") && <ScheduleManager />}
+                {activeTab === "links" && tabVisible("links") && <QuickLinksManager />}
+                {activeTab === "keys" && tabVisible("keys") && <ApiKeyManager />}
+                {activeTab === "team" && tabVisible("team") && <TeamManager />}
               </div>
             </div>
           </main>
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav — عدد أعمدة ديناميكي حسب التابات المتاحة */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-cream-light border-t-2 border-ink">
-        <div className="grid grid-cols-5 gap-1 p-2">
-          {TABS.map((tab) => {
+        <div
+          className="grid gap-1 p-2"
+          style={{ gridTemplateColumns: `repeat(${Math.max(visibleTabs.length, 1)}, minmax(0, 1fr))` }}
+        >
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (

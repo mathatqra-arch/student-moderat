@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { getCurrentAdminCaller, profileCan } from "@/lib/admin-permissions";
+import { DEFAULT_PERMISSIONS, LEADER_PERMISSIONS } from "@/lib/permissions";
 
 // ==========================================
 // Admin Users Management API
@@ -59,35 +61,39 @@ function normalizeEgyptianPhone(phone: string): string {
   return cleaned;
 }
 
-// الأذونات الافتراضية لمشرف جديد (assistant)
-const DEFAULT_PERMISSIONS = {
-  inquiries: { view: true, reply: true, delete: false },
-  announcements: { view: true, create: true, edit: true, delete: false },
-  tasks: { view: true, create: true, edit: true, delete: false },
-  team: { view: true, create: false, edit: false, delete: false },
-  api_keys: { view: false, create: false, delete: false },
-  mcp: { view: false, test: false },
-  settings: { view: false, edit: false },
-};
+// الأذونات الافتراضية والأذونات الكاملة للمشرف — من المصدر الموحد في lib/permissions
+// (DEFAULT_PERMISSIONS و LEADER_PERMISSIONS)
 
-// أذونات الـ leader (كل شيء)
-const LEADER_PERMISSIONS = {
-  inquiries: { view: true, reply: true, delete: true },
-  announcements: { view: true, create: true, edit: true, delete: true },
-  tasks: { view: true, create: true, edit: true, delete: true },
-  team: { view: true, create: true, edit: true, delete: true },
-  api_keys: { view: true, create: true, delete: true },
-  mcp: { view: true, test: true },
-  settings: { view: true, edit: true },
-};
+// بوابة صلاحية موحدة — ترجع null لو مسموح، أو NextResponse 401/403 لو مرفوض
+async function requirePermission(resource: string, action: string) {
+  const { user, profile, configError } = await getCurrentAdminCaller();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (configError) {
+    return NextResponse.json({ error: configError }, { status: 500 });
+  }
+  if (!profile) {
+    return NextResponse.json(
+      { error: "حسابك غير مرتبط بفريق الإدارة" },
+      { status: 403 }
+    );
+  }
+  if (!profileCan(profile, resource, action)) {
+    return NextResponse.json(
+      { error: "معندكش صلاحية للعملية دي — كلم الليدر المسؤول" },
+      { status: 403 }
+    );
+  }
+  return { user, profile } as const;
+}
 
 // GET: قائمة الأدمن مع أذوناتهم
 export async function GET() {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const gate = await requirePermission("team", "view");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const adminClient = getAdminClient();
 
@@ -140,10 +146,9 @@ export async function GET() {
 // POST: إنشاء أدمن جديد
 export async function POST(request: Request) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const gate = await requirePermission("team", "create");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const body = await request.json();
     const { name, phone, role, password, permissions } = body;
@@ -227,10 +232,9 @@ export async function POST(request: Request) {
 // PUT: تحديث مستخدم (تغيير كلمة مرور / تحديث أذونات / تغيير role)
 export async function PUT(request: Request) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const gate = await requirePermission("team", "edit");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const body = await request.json();
     const { user_id, password, permissions, role, name } = body;
@@ -300,10 +304,9 @@ export async function PUT(request: Request) {
 // DELETE: حذف حساب أدمن
 export async function DELETE(request: Request) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const gate = await requirePermission("team", "delete");
+    if (gate instanceof NextResponse) return gate;
+    const user = gate.user;
 
     const body = await request.json();
     const { user_id } = body;

@@ -55,6 +55,23 @@ const DEFAULT_PERMISSIONS: Permissions = {
   settings: { view: false, edit: false },
 };
 
+// رسائل خطأ واضحة للمستخدم:
+// - أخطاء الشبكة (انقطاع إنترنت / DNS) تظهر للمتصفح كـ TypeError: Failed to fetch
+// - أخطاء الـ API تصل في data.error بالعربي من السيرفر — لازم تظهر كما هي
+function friendlyError(err: any): string {
+  const msg = err?.message || "";
+  if (
+    err instanceof TypeError ||
+    msg === "Failed to fetch" ||
+    msg === "NetworkError when attempting to fetch resource." ||
+    msg.includes("ERR_NAME") ||
+    msg.includes("NetworkError")
+  ) {
+    return "تعذر الاتصال بالسيرفر — تأكد من اتصالك بالإنترنت وحاول تاني";
+  }
+  return msg || "حدث خطأ غير متوقع";
+}
+
 const PERMISSION_LABELS: Record<string, { label: string; actions: { key: string; label: string }[] }> = {
   inquiries: {
     label: "الاستفسارات",
@@ -151,11 +168,11 @@ export default function TeamManager() {
     setError(null);
     try {
       const res = await fetch("/api/admin/users");
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `فشل تحميل البيانات (${res.status})`);
       setUsers(data.users || []);
     } catch (err: any) {
-      setError(err.message);
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -178,8 +195,8 @@ export default function TeamManager() {
           password: newPassword,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `فشلت العملية (${res.status})`);
 
       setActionMsg("تم إنشاء الحساب بنجاح! ✅");
       setTimeout(() => setActionMsg(null), 3000);
@@ -189,7 +206,7 @@ export default function TeamManager() {
       setShowAddModal(false);
       fetchUsers();
     } catch (err: any) {
-      setError(err.message);
+      setError(friendlyError(err));
     } finally {
       setCreating(false);
     }
@@ -198,8 +215,8 @@ export default function TeamManager() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPasswordModal || !editPassword) return;
-    if (editPassword.length < 6) {
-      setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+    if (editPassword.length < 8) {
+      setError("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
       return;
     }
 
@@ -211,15 +228,15 @@ export default function TeamManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: showPasswordModal.id, password: editPassword }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `فشلت العملية (${res.status})`);
 
       setActionMsg(`تم تغيير كلمة مرور ${showPasswordModal.name} بنجاح ✅`);
       setTimeout(() => setActionMsg(null), 3000);
       setShowPasswordModal(null);
       setEditPassword("");
     } catch (err: any) {
-      setError(err.message);
+      setError(friendlyError(err));
     } finally {
       setChangingPassword(false);
     }
@@ -241,15 +258,15 @@ export default function TeamManager() {
           role: showPermissionsModal.role,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `فشلت العملية (${res.status})`);
 
       setActionMsg(`تم تحديث أذونات ${showPermissionsModal.name} بنجاح ✅`);
       setTimeout(() => setActionMsg(null), 3000);
       setShowPermissionsModal(null);
       fetchUsers();
     } catch (err: any) {
-      setError(err.message);
+      setError(friendlyError(err));
     } finally {
       setSavingPermissions(false);
     }
@@ -264,14 +281,14 @@ export default function TeamManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: user.id }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `فشلت العملية (${res.status})`);
 
       setActionMsg("تم حذف الحساب ✅");
       setTimeout(() => setActionMsg(null), 3000);
       fetchUsers();
     } catch (err: any) {
-      setError(err.message);
+      setError(friendlyError(err));
     }
   };
 
@@ -464,11 +481,11 @@ export default function TeamManager() {
                 <label className="text-xs font-medium mb-1 block">كلمة المرور *</label>
                 <input
                   type="text"
-                  placeholder="6 أحرف على الأقل"
+                  placeholder="8 أحرف على الأقل"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  minLength={6}
+                  minLength={8}
                   className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 font-mono"
                 />
               </div>
@@ -534,12 +551,12 @@ export default function TeamManager() {
                 <div className="relative">
                   <input
                     type={showEditPassword ? "text" : "password"}
-                    placeholder="6 أحرف على الأقل"
+                    placeholder="8 أحرف على الأقل"
                     value={editPassword}
                     onChange={(e) => setEditPassword(e.target.value)}
                     required
                     autoFocus
-                    minLength={6}
+                    minLength={8}
                     className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:border-amber-500 font-mono"
                   />
                   <button

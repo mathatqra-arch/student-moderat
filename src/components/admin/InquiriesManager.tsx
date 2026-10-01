@@ -32,7 +32,9 @@ const defaultInquiries: Inquiry[] = [
 ];
 
 export default function InquiriesManager() {
-  const [inquiries, setInquiries] = useState<Inquiry[]>(defaultInquiries);
+  // نبدأ بقائمة فارغة — البيانات التجريبية (التي تعتمد على Date.now) تُعرض بعد التركيب فقط
+  // لتجنب اختلاف النص بين السيرفر والعميل (React error #418: Text content does not match)
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   // على الكمبيوتر نستخدم web.whatsapp.com لفتح الشات فوراً بدون صفحة وسيطة
@@ -44,6 +46,9 @@ export default function InquiriesManager() {
   }, []);
 
   useEffect(() => {
+    // خطة بديلة تجريبية — بعد التركيب فقط (client-only)
+    setInquiries(defaultInquiries);
+
     async function loadInquiries() {
       try {
         const supabase = createClient();
@@ -135,7 +140,17 @@ export default function InquiriesManager() {
 
       {/* Inquiries Cards */}
       <div className="space-y-3">
-        {filteredInquiries.map((inquiry) => {
+        {loading && filteredInquiries.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <Clock className="w-4 h-4 animate-pulse" />
+            <span>جاري تحميل الاستفسارات...</span>
+          </div>
+        ) : filteredInquiries.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <MessageSquare className="w-4 h-4" />
+            <span>لا توجد استفسارات في هذا القسم</span>
+          </div>
+        ) : filteredInquiries.map((inquiry) => {
           const waValid = isValidWhatsappNumber(inquiry.whatsapp_number);
           const directChatHref = waValid ? whatsappDirectChatUrl(inquiry.whatsapp_number, { preferWeb }) : "";
           const messageChatHref = waValid

@@ -36,10 +36,15 @@ const defaultTasks: Task[] = [
 ];
 
 export default function TasksTracker() {
-  const [tasks, setTasks] = useState<Task[]>(defaultTasks);
+  // نبدأ بقائمة فارغة — البيانات التجريبية (التي تعتمد على Date.now) تُعرض بعد التركيب فقط
+  // لتجنب اختلاف النص بين السيرفر والعميل (React error #418: Text content does not match)
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // خطة بديلة تجريبية — بعد التركيب فقط (client-only)
+    setTasks(defaultTasks);
+
     async function fetchTasks() {
       try {
         const supabase = createClient();
@@ -103,7 +108,17 @@ export default function TasksTracker() {
       </div>
 
       <div className="space-y-3">
-        {tasks.map((task) => {
+        {loading && tasks.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <Clock className="w-4 h-4 animate-pulse" />
+            <span>جاري تحميل التكليفات...</span>
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <CheckCircle className="w-4 h-4" />
+            <span>لا توجد تكليفات حالياً</span>
+          </div>
+        ) : tasks.map((task) => {
           const urgency = getUrgencyBadge(task.deadline, task.status);
           const UrgencyIcon = urgency.icon;
 

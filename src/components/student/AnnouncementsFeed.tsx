@@ -35,11 +35,16 @@ const defaultAnnouncements: Announcement[] = [
 ];
 
 export default function AnnouncementsFeed() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(defaultAnnouncements);
+  // نبدأ بقائمة فارغة — البيانات التجريبية (التي تعتمد على Date.now) تُعرض بعد التركيب فقط
+  // لتجنب اختلاف النص بين السيرفر والعميل (React error #418: Text content does not match)
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [filter, setFilter] = useState<string>("الكل");
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // خطة بديلة تجريبية — بعد التركيب فقط (client-only)
+    setAnnouncements(defaultAnnouncements);
+
     async function fetchAnnouncements() {
       try {
         const supabase = createClient();
@@ -96,7 +101,16 @@ export default function AnnouncementsFeed() {
 
       {/* Announcements List */}
       <div className="space-y-3">
-        {filteredItems.map((item) => (
+        {loading && filteredItems.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <Clock className="w-4 h-4 animate-pulse" />
+            <span>جاري تحميل الإعلانات...</span>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+            <span>لا توجد إعلانات في هذا القسم</span>
+          </div>
+        ) : filteredItems.map((item) => (
           <Card
             key={item.id}
             className={`relative space-y-2 border ${

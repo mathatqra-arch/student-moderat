@@ -146,37 +146,49 @@ export default function InquiriesManager() {
             key={inquiry.id}
             className="glass-card p-5 rounded-2xl border border-gray-800 space-y-3 relative hover:border-blue-500/30 transition"
           >
-            <div className="flex items-center justify-between gap-2 border-b border-gray-800/80 pb-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* الدوس على اسم الطالب يفتح شات واتساب معاه علطول */}
+            <div className="flex items-start justify-between gap-3 border-b border-gray-800/80 pb-3">
+              {/* الاسم + الرقم + التصنيف — عمود مرتب بدل صف مزدحم */}
+              <div className="min-w-0 space-y-1.5">
                 {waValid ? (
                   <a
                     href={directChatHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     title="فتح شات واتساب مع الطالب فوراً"
-                    className="font-bold text-gray-100 text-base hover:text-emerald-400 transition underline decoration-emerald-500/40 decoration-dotted underline-offset-4"
+                    className="inline-flex items-center gap-1.5 font-bold text-gray-100 text-base hover:text-emerald-400 transition underline decoration-emerald-500/40 decoration-dotted underline-offset-4"
                   >
                     {inquiry.full_name}
                   </a>
                 ) : (
                   <span
                     title={`الرقم غير صالح للواتساب: ${inquiry.whatsapp_number || "فارغ"}`}
-                    className="font-bold text-gray-100 text-base inline-flex items-center gap-1.5 cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 font-bold text-gray-100 text-base"
                   >
                     {inquiry.full_name}
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                   </span>
                 )}
-                <span className="text-xs px-2 py-0.5 rounded-lg bg-gray-800 text-blue-400 border border-gray-700">
-                  {inquiry.category}
-                </span>
-                {/* الرقم كما حُفظ — للتشخيص السريع */}
-                <span dir="ltr" className="text-2xs text-gray-500 font-mono">
-                  {inquiry.whatsapp_number || "لا يوجد رقم"}
-                </span>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* الرقم كما حُفظ — للتشخيص السريع */}
+                  <span
+                    dir="ltr"
+                    className={`inline-flex items-center gap-1 text-2xs font-mono px-2 py-0.5 rounded-lg border max-w-full ${
+                      waValid
+                        ? "text-gray-400 bg-gray-900/70 border-gray-800"
+                        : "text-amber-400 bg-amber-950/40 border-amber-500/30"
+                    }`}
+                  >
+                    <Phone className="w-2.5 h-2.5 flex-shrink-0" />
+                    <span className="truncate">{inquiry.whatsapp_number || "لا يوجد رقم"}</span>
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-lg bg-gray-800 text-blue-400 border border-gray-700">
+                    {inquiry.category}
+                  </span>
+                </div>
               </div>
-              {getStatusBadge(inquiry.status)}
+
+              <div className="flex-shrink-0 pt-0.5">{getStatusBadge(inquiry.status)}</div>
             </div>
 
             <p className="text-gray-300 text-sm leading-relaxed">{inquiry.message}</p>
@@ -193,12 +205,12 @@ export default function InquiriesManager() {
             )}
 
             {/* Actions Bar */}
-            <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs border-t border-gray-800/60">
-              <span className="text-gray-500">
-                التاريخ: {new Date(inquiry.created_at).toLocaleString("ar-EG")}
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs border-t border-gray-800/60">
+              <span className="text-gray-500 whitespace-nowrap">
+                التاريخ: {new Date(inquiry.created_at).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* WhatsApp Direct Chat Button — يفتح الشات مع الطالب علطول برسالة مثبتة تتضمن مشكلته والرد */}
                 {waValid ? (
                   <a

@@ -1,10 +1,11 @@
 /**
  ============================================
- WhatsApp Helpers — روابط واتساب مع رسالة مثبتة
+ WhatsApp Helpers — فتح شات واتساب مع الرسالة المثبتة
  ============================================
  - normalizeWhatsappNumber: تطبيع الرقم للصيغة الدولية (افتراضي مصر 20)
- - whatsappChatUrl:         فتح شات رقم معين مع رسالة جاهزة
- - whatsappShareUrl:        فتح واتساب مع رسالة جاهزة واختيار المستلم لاحقاً
+ - whatsappChatUrl:         فتح شات رقم معين مع رسالة جاهزة (يفتح فوراً حسب الجهاز)
+ - whatsappDirectChatUrl:   فتح شات رقم معين مباشرة بدون رسالة (الدوس على الشخص)
+ - isDesktopDevice:         كشف الكمبيوتر لاستخدام واتساب ويب مباشرة
  */
 
 /** رمز دولة مصر الافتراضي */
@@ -39,21 +40,48 @@ export function normalizeWhatsappNumber(raw: string): string {
 }
 
 /**
- * رابط فتح شات واتساب مع رقم محدد + رسالة مثبتة جاهزة للإرسال.
- * لو الرقم غير صالح يرجع رابط مشاركة عادي حتى لا يتعطل الزر.
+ * كشف إذا كنا على كمبيوتر (وليس موبايل/تابلت) —
+ * على الكمبيوتر wa.me يعرض صفحة وسيطة بدل فتح الشات،
+ * لذلك نستخدم web.whatsapp.com لفتح الشات فوراً.
  */
-export function whatsappChatUrl(number: string, message: string): string {
-  const normalized = normalizeWhatsappNumber(number);
-  const base = normalized ? `https://wa.me/${normalized}` : "https://wa.me/";
-  return `${base}?text=${encodeURIComponent(message)}`;
+export function isDesktopDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+  // iPad على iPadOS 13+ يظهر كـ Mac — نفحص اللمس
+  const isIpadOS = navigator.platform === "MacIntel" && (navigator as unknown as { maxTouchPoints: number }).maxTouchPoints > 1;
+  return !isMobileUA && !isIpadOS;
 }
 
 /**
- * رابط فتح واتساب مع رسالة مثبتة بدون تحديد مستلم —
- * واتساب يفتح شاشة اختيار جهة الاتصال والرسالة مكتوبة جاهزة.
+ * رابط فتح شات واتساب مع رقم محدد مباشرةً + رسالة مثبتة جاهزة.
+ * - على الموبايل: يفتح تطبيق واتساب على الشات فوراً (wa.me)
+ * - على الكمبيوتر: يفتح واتساب ويب على الشات فوراً (preferWeb) بدون صفحة وسيطة
  */
-export function whatsappShareUrl(message: string): string {
-  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+export function whatsappChatUrl(number: string, message: string, opts?: { preferWeb?: boolean }): string {
+  const normalized = normalizeWhatsappNumber(number);
+  const text = `text=${encodeURIComponent(message)}`;
+
+  if (opts?.preferWeb && normalized) {
+    return `https://web.whatsapp.com/send?phone=${normalized}&${text}`;
+  }
+
+  const base = normalized ? `https://wa.me/${normalized}` : "https://wa.me/";
+  return `${base}?${text}`;
+}
+
+/**
+ * رابط فتح شات واتساب مع شخص مباشرةً بدون رسالة جاهزة —
+ * يُستخدم عند الدوس على اسم/شخص الطالب في لوحة الإدارة.
+ */
+export function whatsappDirectChatUrl(number: string, opts?: { preferWeb?: boolean }): string {
+  const normalized = normalizeWhatsappNumber(number);
+
+  if (opts?.preferWeb && normalized) {
+    return `https://web.whatsapp.com/send?phone=${normalized}`;
+  }
+
+  return normalized ? `https://wa.me/${normalized}` : "https://wa.me/";
 }
 
 /**
@@ -81,27 +109,5 @@ export function buildInquiryReplyMessage(inquiry: {
     "",
     "✅ الرد:",
     reply,
-  ].join("\n");
-}
-
-/**
- * الرسالة المثبتة التي يرسلها الطالب —
- * تفتح واتساب والرسالة مكتوبة باسمه وتصنيف مشكلته ونص مشكلته.
- */
-export function buildStudentInquiryMessage(opts: {
-  name: string;
-  category: string;
-  message: string;
-}): string {
-  const name = (opts.name || "").trim();
-  const problem = (opts.message || "").trim();
-
-  return [
-    "السلام عليكم،",
-    `أنا ${name || "طالب بالدفعة"}`,
-    `تصنيف المشكلة: ${opts.category}`,
-    "",
-    "المشكلة / الاستفسار:",
-    problem || "(اكتب مشكلتك هنا)",
   ].join("\n");
 }

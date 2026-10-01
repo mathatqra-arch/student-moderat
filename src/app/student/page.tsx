@@ -19,7 +19,6 @@ import {
   Video,
   Users,
   Search,
-  MessageCircle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PWAPrompts } from "@/components/ui/pwa/Prompts";
@@ -32,7 +31,6 @@ import {
   isSessionOnline,
   sessionOnlineUrl,
 } from "@/lib/format";
-import { whatsappShareUrl, buildStudentInquiryMessage } from "@/lib/whatsapp";
 
 type Tab = "home" | "schedule" | "tasks" | "inquiry" | "links";
 
@@ -516,8 +514,6 @@ function InquiryTab() {
   const [category, setCategory] = useState("أكاديمي");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  // آخر استفسار مُرسل — لعرض زر واتساب برسالة مثبتة في شاشة النجاح
-  const [lastInquiry, setLastInquiry] = useState<{ name: string; category: string; message: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -527,7 +523,6 @@ function InquiryTab() {
       const supabase = createClient();
       await supabase.from("inquiries").insert([{ full_name: name.trim(), whatsapp_number: phone.trim(), message: message.trim(), category, status: "new" }]);
       setSuccess(true);
-      setLastInquiry({ name: name.trim(), category, message: message.trim() });
       setName(""); setPhone(""); setMessage("");
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
@@ -541,18 +536,6 @@ function InquiryTab() {
         </div>
         <h3 className="font-extrabold text-lg">تم إرسال استفسارك!</h3>
         <p className="text-sm">سيتم التواصل معك عبر الواتساب</p>
-        {lastInquiry && (
-          <a
-            href={whatsappShareUrl(buildStudentInquiryMessage(lastInquiry))}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="brutal-btn w-full max-w-xs mx-auto py-3 flex items-center justify-center gap-2 text-sm"
-            style={{ background: "#25D366" }}
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span>افتح واتساب وأرسل مشكلتك الآن</span>
-          </a>
-        )}
         <button onClick={() => setSuccess(false)} className="brutal-btn-ghost px-4 py-2 text-xs">إرسال استفسار آخر</button>
       </div>
     );
@@ -592,21 +575,6 @@ function InquiryTab() {
         <button type="submit" disabled={submitting} className="brutal-btn-accent w-full py-3 flex items-center justify-center gap-2 text-sm">
           <Send className="w-4 h-4" /> {submitting ? "جاري الإرسال..." : "إرسال الاستفسار"}
         </button>
-
-        {/* زر واتساب — يفتح واتساب برسالة مثبتة جاهزة باسم الطالب ومشكلته */}
-        <div className="space-y-1.5 pt-1">
-          <a
-            href={whatsappShareUrl(buildStudentInquiryMessage({ name, category, message }))}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="brutal-btn w-full py-3 flex items-center justify-center gap-2 text-sm"
-            style={{ background: "#25D366" }}
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span>أو افتح واتساب وأرسل مشكلتك الآن</span>
-          </a>
-          <p className="text-2xs text-gray text-center font-bold">الرسالة هتفتح جاهزة باسمك ومشكلتك — اختار شات الليدر وابعت</p>
-        </div>
       </form>
     </div>
   );

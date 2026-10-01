@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Inquiry } from "@/types/database";
 import { MessageSquare, Phone, CheckCircle, Clock, Archive, Sparkles, Filter } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { whatsappChatUrl, buildInquiryReplyMessage } from "@/lib/whatsapp";
+import { whatsappChatUrl, whatsappDirectChatUrl, buildInquiryReplyMessage, isDesktopDevice } from "@/lib/whatsapp";
 
 const defaultInquiries: Inquiry[] = [
   {
@@ -35,6 +35,13 @@ export default function InquiriesManager() {
   const [inquiries, setInquiries] = useState<Inquiry[]>(defaultInquiries);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  // على الكمبيوتر نستخدم web.whatsapp.com لفتح الشات فوراً بدون صفحة وسيطة
+  // (useState بعد التركيب لتجنب اختلاف الـ hydration)
+  const [preferWeb, setPreferWeb] = useState(false);
+
+  useEffect(() => {
+    setPreferWeb(isDesktopDevice());
+  }, []);
 
   useEffect(() => {
     async function loadInquiries() {
@@ -135,7 +142,16 @@ export default function InquiriesManager() {
           >
             <div className="flex items-center justify-between gap-2 border-b border-gray-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-100 text-base">{inquiry.full_name}</span>
+                {/* الدوس على اسم الطالب يفتح شات واتساب معاه علطول */}
+                <a
+                  href={whatsappDirectChatUrl(inquiry.whatsapp_number, { preferWeb })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="فتح شات واتساب مع الطالب فوراً"
+                  className="font-bold text-gray-100 text-base hover:text-emerald-400 transition underline decoration-emerald-500/40 decoration-dotted underline-offset-4"
+                >
+                  {inquiry.full_name}
+                </a>
                 <span className="text-xs px-2 py-0.5 rounded-lg bg-gray-800 text-blue-400 border border-gray-700">
                   {inquiry.category}
                 </span>
@@ -163,9 +179,9 @@ export default function InquiriesManager() {
               </span>
 
               <div className="flex items-center gap-2">
-                {/* WhatsApp Direct Chat Button — يفتح واتساب برسالة مثبتة تتضمن مشكلة الطالب والرد */}
+                {/* WhatsApp Direct Chat Button — يفتح الشات مع الطالب علطول برسالة مثبتة تتضمن مشكلته والرد */}
                 <a
-                  href={whatsappChatUrl(inquiry.whatsapp_number, buildInquiryReplyMessage(inquiry))}
+                  href={whatsappChatUrl(inquiry.whatsapp_number, buildInquiryReplyMessage(inquiry), { preferWeb })}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition shadow-sm shadow-emerald-600/20"

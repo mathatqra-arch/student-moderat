@@ -46,6 +46,73 @@
     --border-color: var(--ink);        /* #2D2D2D — softer than pure black */
     --border-color-soft: var(--gray-lighter);
 
+    /* === Legacy surface tokens (RGB triplets) ===
+       بعض مكونات الإدارة و PWA بتستخدم rgb(var(--surface)) وغيرها —
+       كانت غير معرفة فبتطلع خلفيات شفافة. مربوطة الآن بنظام الكريم */
+    --surface:        255 253 245;     /* #FFFDF5 cream-light — خلفية المودالات */
+    --surface-subtle: 245 245 240;     /* #F5F5F0 cream — حقول الإدخال */
+    --surface-muted:  237 235 227;     /* #EDEBE3 cream-dark — hover */
+    --text:           45 45 45;        /* #2D2D2D ink — النص الأساسي */
+    --text-muted:     107 107 107;     /* #6B6B6B gray — النص الثانوي */
+    --border:         45 45 45;        /* #2D2D2D ink — حدود واضحة */
+
+    /* === Tailwind semantic tokens (كانت كلها غير معرفة = كلاسات شفافة/مفقودة) === */
+    --color-surface-base:    var(--cream);
+    --color-surface-raised:  var(--cream-light);
+    --color-surface-overlay: rgba(45, 45, 45, 0.55);
+    --color-surface-modal:   var(--cream-light);
+    --color-surface-inset:   var(--cream-dark);
+
+    --color-text-primary:   var(--ink);
+    --color-text-secondary: var(--ink-soft);
+    --color-text-tertiary:  var(--ink-light);
+    --color-text-muted:     var(--gray);
+
+    --color-border-default: var(--ink);
+    --color-border-subtle:  var(--gray-lighter);
+    --color-border-strong:  var(--ink);
+    --color-border-focus:   var(--blue);
+
+    --color-brand:            #3B82F6;   /* أزرق — متوافق مع لهجة الأدمن */
+    --color-brand-500:        #3B82F6;
+    --color-brand-600:        #2563EB;
+    --color-brand-hover:      #2563EB;
+    --color-brand-foreground: #FFFFFF;
+
+    --color-success:        var(--green);
+    --color-success-fg:     #FFFFFF;
+    --color-warning:        var(--yellow-dark);
+    --color-warning-fg:     var(--ink);
+    --color-destructive:    var(--coral);
+    --color-destructive-fg: #FFFFFF;
+    --color-info:           var(--blue);
+    --color-info-fg:        #FFFFFF;
+
+    /* Radius extras */
+    --radius-2xl: 24px;
+    --radius-full: 9999px;
+
+    /* Shadows extras */
+    --shadow-premium: var(--shadow-lg);
+    --shadow-glow: 0 0 0 3px rgba(92, 149, 255, 0.35);
+    --shadow-inner: inset 0 2px 4px rgba(45, 45, 45, 0.08);
+
+    /* Motion extras */
+    --ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+    --duration-fast: 120ms;
+    --duration-normal: 200ms;
+    --duration-slow: 320ms;
+
+    /* Z-index scale */
+    --z-dropdown: 30;
+    --z-sticky: 40;
+    --z-modal: 50;
+    --z-toast: 60;
+
+    /* Typography extra */
+    --text-hero: 3rem;
+
     /* Shadow — hard offset (brutalist) */
     --shadow-sm:  2px 2px 0 var(--ink);
     --shadow-md:   4px 4px 0 var(--ink);

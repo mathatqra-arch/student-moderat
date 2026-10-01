@@ -34,6 +34,8 @@ const config: Config = {
         },
         brand: {
           DEFAULT: "var(--color-brand)",
+          500: "var(--color-brand-500)",
+          600: "var(--color-brand-600)",
           hover: "var(--color-brand-hover)",
           foreground: "var(--color-brand-foreground)",
         },

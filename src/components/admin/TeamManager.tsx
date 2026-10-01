@@ -417,7 +417,7 @@ export default function TeamManager() {
       {/* Add User Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+          <div className="bg-cream-light border-2 border-ink rounded-2xl p-6 max-w-md w-full space-y-4 shadow-brutal-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-brand-600/20 text-brand-500 border border-brand-500/30 flex items-center justify-center">
@@ -502,7 +502,7 @@ export default function TeamManager() {
       {/* Password Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+          <div className="bg-cream-light border-2 border-ink rounded-2xl p-6 max-w-md w-full space-y-4 shadow-brutal-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-amber-600/20 text-amber-500 border border-amber-500/30 flex items-center justify-center">
@@ -578,8 +578,8 @@ export default function TeamManager() {
       {/* Permissions Modal */}
       {showPermissionsModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[rgb(var(--surface))] border border-[rgb(var(--border))] rounded-2xl p-6 max-w-2xl w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between sticky top-0 bg-[rgb(var(--surface))] pb-3 border-b border-[rgb(var(--border))] z-10">
+          <div className="bg-cream-light border-2 border-ink rounded-2xl p-6 max-w-2xl w-full space-y-4 shadow-brutal-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between sticky top-0 bg-cream-light pb-3 border-b border-[rgb(var(--border))] z-10">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-purple-600/20 text-purple-500 border border-purple-500/30 flex items-center justify-center">
                   <Shield className="w-5 h-5" />

@@ -63,7 +63,7 @@ function AdminLoginForm() {
         {/* Logo */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl border-2 border-ink bg-yellow shadow-brutal-md mb-3">
-            <Shield className="w-8 h-8 text-ink" />
+            <Shield className="w-8 h-8 text-ink" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight">لوحة تحكم الأدمن</h1>
           <p className="text-sm text-gray mt-1">دخول المشرفين — رقم الهاتف + كلمة المرور</p>
@@ -72,7 +72,7 @@ function AdminLoginForm() {
         {/* Error */}
         {errorMsg && (
           <div className="brutal-card-flat bg-coral text-cream-light px-4 py-3 rounded-lg text-sm flex items-center gap-2 mb-4 animate-fade-in">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -81,13 +81,16 @@ function AdminLoginForm() {
         <form onSubmit={handleLogin} className="brutal-card p-6 space-y-4">
           {/* Phone */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5" />
+            <label htmlFor="login-phone" className="text-xs font-bold flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" aria-hidden="true" />
               رقم الهاتف
             </label>
             <input
+              id="login-phone"
+              name="phone"
               type="tel"
               inputMode="tel"
+              autoComplete="tel"
               placeholder="01040945655"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -101,13 +104,16 @@ function AdminLoginForm() {
 
           {/* Password */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5" />
+            <label htmlFor="login-password" className="text-xs font-bold flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" aria-hidden="true" />
               كلمة المرور
             </label>
             <div className="relative">
               <input
+                id="login-password"
+                name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -117,10 +123,10 @@ function AdminLoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
                 className="absolute left-3 top-1/2 -translate-y-1/2 p-1 text-gray hover:text-ink transition"
-                tabIndex={-1}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
               </button>
             </div>
           </div>
@@ -133,12 +139,12 @@ function AdminLoginForm() {
           >
             {loading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 <span>جاري التحقق...</span>
               </>
             ) : (
               <>
-                <Key className="w-4 h-4" />
+                <Key className="w-4 h-4" aria-hidden="true" />
                 <span>تسجيل الدخول</span>
               </>
             )}

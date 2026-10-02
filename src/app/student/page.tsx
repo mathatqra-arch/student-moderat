@@ -586,16 +586,16 @@ function InquiryTab() {
       </h2>
       <form onSubmit={handleSubmit} className="brutal-card p-5 space-y-4">
         <div>
-          <label className="text-xs font-bold mb-1.5 block flex items-center gap-1.5">
-            <User className="w-3 h-3" /> الاسم الكامل
+          <label className="text-xs font-bold mb-1.5 block flex items-center gap-1.5" htmlFor="inq-name">
+            <User className="w-3 h-3" aria-hidden="true" /> الاسم الكامل
           </label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="brutal-input w-full px-3.5 py-2.5 text-sm" />
+          <input id="inq-name" type="text" aria-label="الاسم" value={name} onChange={(e) => setName(e.target.value)} required className="brutal-input w-full px-3.5 py-2.5 text-sm" />
         </div>
         <div>
-          <label className="text-xs font-bold mb-1.5 block flex items-center gap-1.5">
-            <Phone className="w-3 h-3" /> رقم الواتساب
+          <label className="text-xs font-bold mb-1.5 block flex items-center gap-1.5" htmlFor="inq-phone">
+            <Phone className="w-3 h-3" aria-hidden="true" /> رقم الواتساب
           </label>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required dir="ltr" className="brutal-input w-full px-3.5 py-2.5 text-sm text-left font-mono" />
+          <input id="inq-phone" type="tel" autoComplete="tel" aria-label="رقم الواتساب" value={phone} onChange={(e) => setPhone(e.target.value)} required dir="ltr" className="brutal-input w-full px-3.5 py-2.5 text-sm text-left font-mono" />
         </div>
         <div>
           <label className="text-xs font-bold mb-1.5 block">تصنيف الاستفسار</label>
@@ -606,8 +606,8 @@ function InquiryTab() {
           </div>
         </div>
         <div>
-          <label className="text-xs font-bold mb-1.5 block">الرسالة</label>
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={4} className="brutal-input w-full px-3.5 py-2.5 text-sm resize-none" />
+          <label className="text-xs font-bold mb-1.5 block" htmlFor="inq-message">الرسالة</label>
+          <textarea id="inq-message" aria-label="نص الاستفسار" value={message} onChange={(e) => setMessage(e.target.value)} required rows={4} className="brutal-input w-full px-3.5 py-2.5 text-sm resize-none" />
         </div>
         <button type="submit" disabled={submitting} className="brutal-btn-accent w-full py-3 flex items-center justify-center gap-2 text-sm">
           <Send className="w-4 h-4" /> {submitting ? "جاري الإرسال..." : "إرسال الاستفسار"}

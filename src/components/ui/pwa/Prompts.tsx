@@ -99,9 +99,10 @@ export function PWAInstallPrompt() {
           </div>
           <button
             onClick={handleDismiss}
+            aria-label="إغلاق"
             className="p-1 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))] hover:bg-[rgb(var(--surface-subtle))] transition flex-shrink-0"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -186,9 +187,10 @@ export function NotificationsPrompt() {
           </div>
           <button
             onClick={handleDismiss}
+            aria-label="إغلاق"
             className="p-1 rounded-lg text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text))] hover:bg-[rgb(var(--surface-subtle))] transition flex-shrink-0"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>

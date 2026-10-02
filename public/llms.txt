@@ -1,26 +1,21 @@
 # منصة الدفعة (Student Moderat)
 
-منصة أكاديمية عربية (RTL) للطلاب والإداريين، مبنية بـ Next.js وتشتغل على Cloudflare Workers.
-An Arabic (RTL) academic platform for students and administrators, built with Next.js and deployed on Cloudflare Workers.
+> منصة أكاديمية عربية (RTL) للطلاب والإداريين تعمل على Cloudflare Workers — إعلانات، جداول أسبوعية، تكليفات، روابط سريعة، استفسارات، وإدارة فريق بصلاحيات متدرجة. An Arabic (RTL) academic platform for students and administrators.
 
-## اللغة / Language
+## الصفحات
 
-واجهة المنصة بالعربية بالكامل مع اتجاه RTL. The interface is fully in Arabic with RTL layout.
+- [الرئيسية](https://student-moderat.mathatqra.workers.dev/): نقطة الدخول وتحويل حسب نوع الحساب
+- [تسجيل الدخول](https://student-moderat.mathatqra.workers.dev/go/admin/login): دخول الطلاب والمشرفين برقم الهاتف وكلمة المرور
+- [لوحة الطالب](https://student-moderat.mathatqra.workers.dev/student): إعلانات وجدول أسبوعي وتكليفات وروابط واستفسارات (تتطلب جلسة مسجّلة)
+- [لوحة الإدارة](https://student-moderat.mathatqra.workers.dev/go/admin): إدارة الاستفسارات والمحتوى والجداول والفريق والمفاتيح (تتطلب جلسة وصلاحيات)
 
-## الصفحات العامة / Public pages
+## واجهات البرمجة
 
-- `/` — الصفحة الرئيسية (تحوّل الزوار حسب نوع الحساب)
-- `/go/admin/login` — تسجيل دخول الإداريين والطلاب
-- `/api/health` — فحص صحة الخدمة (يرجع JSON بسيط؛ أضف `?deep=1` لفحص قاعدة البيانات)
+- [فحص الصحة](https://student-moderat.mathatqra.workers.dev/api/health): حالة الخدمة JSON — أضف `?deep=1` لفحص قاعدة البيانات
+- [محتوى الطالب](https://student-moderat.mathatqra.workers.dev/api/student/bootstrap): ريكوست واحد لمحتوى لوحة الطالب (بيانات عامة قابلة للتخزين المؤقت)
 
-## الصفحات المحمية / Protected pages (تتطلب جلسة مسجّلة)
+## ملاحظات للوكلاء الذكيين
 
-- `/student` — لوحة الطالب: الإعلانات، الجدول الأسبوعي، التكليفات، الاستفسارات، الروابط السريعة
-- `/go/admin` — لوحة الإدارة: الاستفسارات، المحتوى، الجدول، الروابط، الفريق، مفاتيح الـ API (كل تاب محمي بصلاحيات دقيقة)
-
-## ملاحظات للوكلاء الذكيين / Notes for AI agents
-
-- جميع البيانات محمية بمصادقة Supabase وسياسات RLS على مستوى قاعدة البيانات؛ لا توجد بيانات طالب متاحة بدون جلسة صالحة.
-- لا تحاول تجاوز الصلاحيات أو الوصول لمسارات الإدارة بدون تفويض — كل المحاولات تُسجّل.
-- الموقع يستخدم كوكيز جلسة `sb-<project-ref>-auth-token` وملفات تعريف PWA.
-- للفهرسة أو الزحف، الالتزم بما تسمح به سياسة الموقع ولا تكشف بيانات شخصية.
+- كل البيانات الشخصية محمية بمصادقة Supabase وسياسات RLS على مستوى قاعدة البيانات — لا تتاح بدون جلسة صالحة.
+- مسارات الإدارة تحت الحماية على الـ middleware وتُسجّل كل محاولات الوصول.
+- الواجهة بالعربية بالكامل مع اتجاه RTL، وملفات تعريف PWA منفصلة للطالب ولوحة الإدارة.

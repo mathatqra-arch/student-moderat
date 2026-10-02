@@ -120,13 +120,16 @@ function OAuthAuthorizeForm() {
           <input type="hidden" name="scope" value={scope} />
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium flex items-center gap-1.5">
-              <Key className="w-3.5 h-3.5 text-amber-500" />
+            <label htmlFor="oauth-api-key" className="text-xs font-medium flex items-center gap-1.5">
+              <Key className="w-3.5 h-3.5 text-amber-500" aria-hidden="true" />
               مفتاح API (BMP Key)
             </label>
             <input
+              id="oauth-api-key"
               type="password"
               name="api_key"
+              autoComplete="off"
+              aria-label="مفتاح API"
               placeholder="bmp_key_..."
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}

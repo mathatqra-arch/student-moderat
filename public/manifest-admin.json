@@ -1,0 +1,15 @@
+{
+  "id": "/go/admin/",
+  "name": "منصة الدفعة — لوحة الإدارة",
+  "short_name": "الإدارة",
+  "description": "لوحة إدارة منصة الدفعة: الاستفسارات والمحتوى والجداول والفريق والصلاحيات",
+  "start_url": "/go/admin",
+  "display": "standalone",
+  "background_color": "#F9F7EF",
+  "theme_color": "#3B2465",
+  "orientation": "portrait",
+  "icons": [
+    {"src": "/icons/icon-admin-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "/icons/icon-admin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

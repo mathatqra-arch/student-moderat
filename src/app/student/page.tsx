@@ -51,8 +51,91 @@ function nextSessionDate(dayOfWeek: number, startTime: string): Date {
   return d;
 }
 
+// ==========================================
+// Bootstrap — ريكوست واحد لكل محتوى الصفحة
+// كاش جلسة فوري (عرض لحظي عند الرجوع) + تحديث خلفي stale-while-revalidate
+// ==========================================
+interface BootstrapData {
+  announcements: any[];
+  schedules: any[];
+  tasks: any[];
+  links: any[];
+  important_dates: any[];
+  at: number; // وقت التخزين
+}
+
+const BOOTSTRAP_KEY = "student_bootstrap_v1";
+const BOOTSTRAP_TTL = 60_000; // دقيقة — بعدها نحدّث من الشبكة في الخلفية
+
+// منع تكرار الريكوست المتوازي (StrictMode / ريمونت سريع)
+let bootstrapInFlight = false;
+
+function readBootstrapCache(): BootstrapData | null {
+  try {
+    const raw = sessionStorage.getItem(BOOTSTRAP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.announcements)) return null;
+    return parsed as BootstrapData;
+  } catch {
+    return null;
+  }
+}
+
+function useBootstrap() {
+  const [data, setData] = useState<BootstrapData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    setError(null);
+    const cached = readBootstrapCache();
+    if (cached) setData(cached); // عرض فوري من الكاش (إن وجد)
+
+    // revalidate: لو مفيش كاش أو الكاش عدى عمره → نجيب من الشبكة
+    // ولو الكاش لسه جديد بنعدّي الريكوست خالص = زيرو استهلاك
+    if (cached && Date.now() - cached.at < BOOTSTRAP_TTL) return;
+    if (bootstrapInFlight) return; // في ريكوست شغال — مش محتاجين تكرار
+    bootstrapInFlight = true;
+
+    fetch("/api/student/bootstrap", { cache: "no-cache" })
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || `فشل التحميل (${res.status})`);
+        const fresh: BootstrapData = { ...json, at: Date.now() };
+        try { sessionStorage.setItem(BOOTSTRAP_KEY, JSON.stringify(fresh)); } catch {}
+        setData(fresh); // تحديث خلفي صامت — المحتوى بيظهر حالاً ويتحدث لو فيه جديد
+      })
+      .catch((err: unknown) => {
+        // فشل الشبكة ومعانا كاش قديم → نسيبه معروض (offline-friendly)
+        if (!cached) setError(err instanceof Error ? err.message : "فشل تحميل المحتوى");
+      })
+      .finally(() => {
+        bootstrapInFlight = false;
+      });
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { data, error, retry: load };
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="brutal-card p-8 rounded-xl text-center space-y-3 max-w-md mx-auto">
+      <AlertCircle className="w-10 h-10 text-coral mx-auto" />
+      <h3 className="font-extrabold">حصلت مشكلة في التحميل</h3>
+      <p className="text-xs text-gray">{message} — تأكد من اتصالك بالإنترنت وحاول تاني.</p>
+      <button onClick={onRetry} className="brutal-btn-accent px-4 py-2 text-xs">إعادة المحاولة</button>
+    </div>
+  );
+}
+
 export default function StudentPage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
+  const { data, error, retry } = useBootstrap();
 
   return (
     <div className="min-h-screen bg-cream text-ink relative overflow-hidden">
@@ -90,7 +173,7 @@ export default function StudentPage() {
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-screen">
+        <div className="flex-1 flex flex-col min-h-screen min-w-0">
           {/* Mobile Header */}
           <header className="lg:hidden sticky top-0 z-30 bg-cream-light border-b-2 border-ink px-4 py-3">
             <div className="flex items-center justify-between">
@@ -107,11 +190,17 @@ export default function StudentPage() {
           <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8">
             <div className="max-w-5xl mx-auto">
               <div key={activeTab} className="tab-content">
-                {activeTab === "home" && <HomeTab />}
-                {activeTab === "schedule" && <ScheduleTab />}
-                {activeTab === "tasks" && <TasksTab />}
-                {activeTab === "inquiry" && <InquiryTab />}
-                {activeTab === "links" && <LinksTab />}
+                {!data ? (
+                  error ? <ErrorState message={error} onRetry={retry} /> : <LoadingState />
+                ) : (
+                  <>
+                    {activeTab === "home" && <HomeTab data={data} />}
+                    {activeTab === "schedule" && <ScheduleTab schedules={data.schedules} />}
+                    {activeTab === "tasks" && <TasksTab tasks={data.tasks} />}
+                    {activeTab === "inquiry" && <InquiryTab />}
+                    {activeTab === "links" && <LinksTab links={data.links} />}
+                  </>
+                )}
               </div>
             </div>
           </main>
@@ -168,54 +257,32 @@ function MobileTabButton({ active, onClick, icon: Icon, label }: { active: boole
 // ==========================================
 // Home Tab
 // ==========================================
-function HomeTab() {
-  const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [upcoming, setUpcoming] = useState<any[]>([]);
-  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
+function HomeTab({ data }: { data: BootstrapData }) {
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const supabase = createClient();
-      const nowISO = new Date().toISOString();
-      const [annRes, datesRes, schedRes, tasksRes] = await Promise.all([
-        supabase.from("announcements").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }),
-        supabase.from("important_dates").select("*, subjects(*)").gte("date", nowISO).order("date", { ascending: true }).limit(10),
-        // الجدول الأسبوعي مرتب: اليوم ثم الوقت
-        supabase.from("schedules").select("*, subjects(name, color)").eq("is_active", true).order("day_of_week").order("start_time"),
-        // التكليفات القادمة — من الأقرب انتهاءً
-        supabase.from("tasks").select("*").eq("status", "active").gte("deadline", nowISO).order("deadline", { ascending: true }).limit(5),
-      ]);
-      setAnnouncements(annRes.data || []);
+  // مواعيد قادمة = المواعيد المهمة + أقرب الحصص القادمة من الجدول الأسبوعي
+  const nowISO = new Date().toISOString();
+  const dateItems = data.important_dates.map((d: any) => ({
+    key: `date-${d.id}`,
+    kind: "date" as const,
+    when: new Date(d.date),
+    data: d,
+  }));
+  const sessionItems = data.schedules.map((s: any) => ({
+    key: `sess-${s.id}`,
+    kind: "session" as const,
+    when: nextSessionDate(s.day_of_week, s.start_time),
+    data: s,
+  }));
+  const upcoming = [...dateItems, ...sessionItems]
+    .sort((a, b) => a.when.getTime() - b.when.getTime())
+    .slice(0, 8);
 
-      // مواعيد قادمة = المواعيد المهمة + أقرب الحصص القادمة من الجدول الأسبوعي
-      const dateItems = (datesRes.data || []).map((d: any) => ({
-        key: `date-${d.id}`,
-        kind: "date" as const,
-        when: new Date(d.date),
-        data: d,
-      }));
-      const sessionItems = (schedRes.data || []).map((s: any) => ({
-        key: `sess-${s.id}`,
-        kind: "session" as const,
-        when: nextSessionDate(s.day_of_week, s.start_time),
-        data: s,
-      }));
-      const unified = [...dateItems, ...sessionItems]
-        .sort((a, b) => a.when.getTime() - b.when.getTime())
-        .slice(0, 8);
+  // التكليفات القادمة — من الأقرب انتهاءً (فلترة محلية من نفس الداتا)
+  const upcomingTasks = data.tasks.filter((t: any) => t.deadline && t.deadline >= nowISO).slice(0, 5);
 
-      setUpcoming(unified);
-      setUpcomingTasks(tasksRes.data || []);
-      setLoading(false);
-    };
-    fetchData();
-  }, []);
-
+  const announcements = data.announcements;
   const filtered = announcements.filter((a) => !search || a.title.includes(search) || a.content.includes(search));
-
-  if (loading) return <LoadingState />;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -293,21 +360,8 @@ function HomeTab() {
 // ==========================================
 // Schedule Tab
 // ==========================================
-function ScheduleTab() {
-  const [schedules, setSchedules] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
+function ScheduleTab({ schedules }: { schedules: any[] }) {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-
-  useEffect(() => {
-    const fetchData = async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from("schedules").select("*, subjects(*)").eq("is_active", true).order("day_of_week").order("start_time");
-      setSchedules(data || []);
-      setLoading(false);
-    };
-    fetchData();
-  }, []);
 
   const filtered = schedules;
 
@@ -320,8 +374,6 @@ function ScheduleTab() {
   Object.values(grouped).forEach((arr) =>
     arr.sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")))
   );
-
-  if (loading) return <LoadingState />;
 
   return (
     <div className="space-y-5">
@@ -406,7 +458,7 @@ function SessionCard({ session }: { session: any }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm truncate text-ink">{subject?.name || "—"}</p>
-        <div className="flex items-center gap-2 text-2xs mt-0.5">
+        <div className="flex items-center gap-2 text-2xs mt-0.5 flex-wrap">
           <span className={`brutal-badge ${typeInfo.bg}`}>
             <TypeIcon className="w-2.5 h-2.5" />
             {typeInfo.label}
@@ -469,22 +521,7 @@ function GridSessionCard({ session }: { session: any }) {
 // ==========================================
 // Tasks Tab
 // ==========================================
-function TasksTab() {
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchTasks = async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from("tasks").select("*").eq("status", "active").order("deadline", { ascending: true });
-      setTasks(data || []);
-      setLoading(false);
-    };
-    fetchTasks();
-  }, []);
-
-  if (loading) return <LoadingState />;
-
+function TasksTab({ tasks }: { tasks: any[] }) {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
@@ -583,21 +620,7 @@ function InquiryTab() {
 // ==========================================
 // Links Tab
 // ==========================================
-function LinksTab() {
-  const [links, setLinks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLinks = async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from("quick_links").select("*").order("order_index", { ascending: true });
-      setLinks(data || []);
-      setLoading(false);
-    };
-    fetchLinks();
-  }, []);
-
-  if (loading) return <LoadingState />;
+function LinksTab({ links }: { links: any[] }) {
 
   return (
     <div className="space-y-4">

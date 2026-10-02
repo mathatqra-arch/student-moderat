@@ -57,7 +57,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Cairo", "Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-cairo)", "Cairo", "Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "SF Mono", "ui-monospace", "monospace"],
       },
       fontSize: {

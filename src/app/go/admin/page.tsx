@@ -213,7 +213,7 @@ export default function AdminDashboardPage() {
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-screen">
+        <div className="flex-1 flex flex-col min-h-screen min-w-0">
           {/* Mobile Header */}
           <header className="lg:hidden sticky top-0 z-30 bg-cream-light border-b-2 border-ink px-4 py-3">
             <div className="flex items-center gap-2">

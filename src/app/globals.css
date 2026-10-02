@@ -660,6 +660,11 @@
     color: var(--ink) !important;
   }
 
+  /* ===== منع الانزلاق الأفقي RTL (القائمة اللازقة في حرف الشاشة) =====
+     الحاويات لازم تقبل التصغير تحت محتواها — والبادي ممنوع يتحرك أفقياً */
+  body { overflow-x: clip; }
+  main, .tab-content { min-width: 0; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;

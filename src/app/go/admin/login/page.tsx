@@ -91,7 +91,7 @@ function AdminLoginForm() {
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="01040945655"
+              placeholder="01000000000"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required

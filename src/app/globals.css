@@ -406,18 +406,28 @@
     transition: width 300ms var(--ease-standard);
   }
 
-  /* Skeleton */
+  /* Skeleton — اللمعان بـ transform على ::after (composited) بدل background-position
+     عشان يشتغل على الـ GPU وميعملش repaint/main-thread work في كل فريم */
   .skeleton {
-    background: linear-gradient(90deg, var(--gray-light) 0%, var(--gray-lighter) 50%, var(--gray-light) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 2s linear infinite;
+    position: relative;
+    overflow: hidden;
+    background: var(--gray-light);
     border-radius: var(--radius-md);
     border: var(--border-thick) solid var(--ink);
   }
 
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, var(--gray-lighter) 50%, transparent 100%);
+    transform: translateX(-100%);
+    animation: shimmer 1.6s linear infinite;
+    will-change: transform;
+  }
+
   @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+    to { transform: translateX(100%); }
   }
 
   /* Decorative blob backgrounds */

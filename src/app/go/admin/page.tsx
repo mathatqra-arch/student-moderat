@@ -14,15 +14,50 @@ import {
   Loader2,
   ShieldAlert,
 } from "lucide-react";
-import InquiriesManager from "@/components/admin/InquiriesManager";
-import ContentManager from "@/components/admin/ContentManager";
-import TeamManager from "@/components/admin/TeamManager";
-import ApiKeyManager from "@/components/admin/ApiKeyManager";
-import ScheduleManager from "@/components/admin/ScheduleManager";
-import QuickLinksManager from "@/components/admin/QuickLinksManager";
-import SelfPasswordModal from "@/components/admin/SelfPasswordModal";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { hasPermission, PermissionMap } from "@/lib/permissions";
+
+// ==========================================
+// التابات بتتحمّل lazy — كل مدير في chunk منفصل يتنزّل لما تابه يفتح
+// بدل تحميل 7 مكوّنات (2700+ سطر) مرة واحدة مع أول فتح
+// ==========================================
+function ManagerSkeleton() {
+  return (
+    <div className="space-y-3" aria-busy="true">
+      <div className="skeleton h-20" />
+      <div className="skeleton h-32" />
+    </div>
+  );
+}
+
+const InquiriesManager = dynamic(() => import("@/components/admin/InquiriesManager"), {
+  ssr: false,
+  loading: () => <ManagerSkeleton />,
+});
+const ContentManager = dynamic(() => import("@/components/admin/ContentManager"), {
+  ssr: false,
+  loading: () => <ManagerSkeleton />,
+});
+const TeamManager = dynamic(() => import("@/components/admin/TeamManager"), {
+  ssr: false,
+  loading: () => <ManagerSkeleton />,
+});
+const ApiKeyManager = dynamic(() => import("@/components/admin/ApiKeyManager"), {
+  ssr: false,
+  loading: () => <ManagerSkeleton />,
+});
+const ScheduleManager = dynamic(() => import("@/components/admin/ScheduleManager"), {
+  ssr: false,
+  loading: () => <ManagerSkeleton />,
+});
+const QuickLinksManager = dynamic(() => import("@/components/admin/QuickLinksManager"), {
+  ssr: false,
+  loading: () => <ManagerSkeleton />,
+});
+const SelfPasswordModal = dynamic(() => import("@/components/admin/SelfPasswordModal"), {
+  ssr: false,
+});
 
 type TabId = "inquiries" | "content" | "schedules" | "links" | "team" | "keys";
 
@@ -140,7 +175,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cream text-ink relative overflow-hidden">
+    <div className="min-h-screen bg-cream text-ink relative overflow-x-clip">
       {/* Decorative blob */}
       <div className="blob-yellow" style={{ top: "-80px", left: "10%", width: "400px", height: "400px" }} />
 

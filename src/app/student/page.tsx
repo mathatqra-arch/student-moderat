@@ -138,7 +138,7 @@ export default function StudentPage() {
   const { data, error, retry } = useBootstrap();
 
   return (
-    <div className="min-h-screen bg-cream text-ink relative overflow-hidden">
+    <div className="min-h-screen bg-cream text-ink relative overflow-x-clip">
       {/* Decorative blobs */}
       <div className="blob-yellow" style={{ top: "-50px", right: "-50px" }} />
       <div className="blob-coral" style={{ bottom: "10%", left: "5%" }} />

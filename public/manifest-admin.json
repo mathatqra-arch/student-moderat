@@ -3,7 +3,7 @@
   "name": "منصة الدفعة — لوحة الإدارة",
   "short_name": "الإدارة",
   "description": "لوحة إدارة منصة الدفعة: الاستفسارات والمحتوى والجداول والفريق والصلاحيات",
-  "start_url": "/go/admin",
+  "start_url": "/go/admin?src=admin",
   "display": "standalone",
   "background_color": "#F9F7EF",
   "theme_color": "#3B2465",

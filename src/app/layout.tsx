@@ -36,6 +36,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ar" dir="rtl" className={`light ${cairo.variable}`} suppressHydrationWarning>
       <body className={cairo.className}>
+        {
+          // ==========================================
+          // بافر عالمي لحدث beforeinstallprompt — لازم يشتغل قبل أي React
+          // كروم بيبعت الحدث بدري قبل الهيدريشن، ولو مفيش بافر بيتضيع
+          // وكل بوب أبس التثبيت (طالب/إدارة) بيقراه من window.__pwaBuf
+          // ==========================================
+        }
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{(function(){window.__pwaBuf=null;window.addEventListener('beforeinstallprompt',function(e){try{e.preventDefault()}catch(_){};window.__pwaBuf=e;try{window.dispatchEvent(new CustomEvent('pwa-install-available'))}catch(_){}});window.addEventListener('appinstalled',function(){try{window.dispatchEvent(new CustomEvent('pwa-app-installed'))}catch(_){}})})()}catch(_){}`,
+          }}
+        />
         {children}
         {cfAnalyticsToken && (
           <script

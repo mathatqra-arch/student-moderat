@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdminPwaPrompt } from "@/components/ui/pwa/Prompts";
 
 // ==========================================
 // Layout مسار الأدمن — بيتجاوز هوية الـ PWA العامة بهوية منفصلة
@@ -18,5 +19,11 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return (
+    <>
+      {children}
+      {/* بوب أب تثبيت تطبيق الإدارة — شكل مستقل + تتبع تثبيت منفصل عن تطبيق الطالب */}
+      <AdminPwaPrompt />
+    </>
+  );
 }

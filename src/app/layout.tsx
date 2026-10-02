@@ -45,7 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         }
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{(function(){window.__pwaBuf=null;window.addEventListener('beforeinstallprompt',function(e){try{e.preventDefault()}catch(_){};window.__pwaBuf=e;try{window.dispatchEvent(new CustomEvent('pwa-install-available'))}catch(_){}});window.addEventListener('appinstalled',function(){try{window.dispatchEvent(new CustomEvent('pwa-app-installed'))}catch(_){}})})()}catch(_){}`,
+            __html: `try{(function(){window.__pwaBuf=null;window.addEventListener('beforeinstallprompt',function(e){try{e.preventDefault()}catch(_){};window.__pwaBuf=e;try{window.dispatchEvent(new CustomEvent('pwa-install-available'))}catch(_){}});window.addEventListener('appinstalled',function(){try{window.dispatchEvent(new CustomEvent('pwa-app-installed'))}catch(_){}});function __chunkRecover(e){try{var m=((e&&e.message)||'')+((e&&e.reason&&e.reason.message)||'');if(/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(m)){var k='__chunkRecoveryAt';var last=+sessionStorage.getItem(k)||0;if(Date.now()-last>15000){sessionStorage.setItem(k,String(Date.now()));location.reload();}}}catch(_){}}window.addEventListener('error',function(e){__chunkRecover(e.error||e)},true);window.addEventListener('unhandledrejection',function(e){__chunkRecover(e.reason)})})()}catch(_){}`,
           }}
         />
         {children}

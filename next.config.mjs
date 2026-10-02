@@ -13,6 +13,19 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // ==========================================
+        // HTML documents: revalidate دايماً
+        // إصلاح: من غير كده كروم بيستخدم heuristic caching للصفحات ويرجّع HTML
+        // قديم بعد أي نشر جديد → الـ HTML القديم يستدعي chunks اتحذف ->
+        // 404 + ChunkLoadError + "Refused to execute script (MIME text/plain)"
+        // (مستثني: /api عشان الـ no-store بتاعها و /_next عشان الكاش immutable)
+        // ==========================================
+        source: "/((?!api/|_next/).*)",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           // منع تضمين الموقع داخل iframe (حماية من Clickjacking)

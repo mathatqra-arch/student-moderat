@@ -27,8 +27,9 @@ const A = {
 export const RESOURCES: Record<string, ResourceConfig> = {
   inquiries: {
     label: "الاستفسارات",
-    actions: [A.view, A.reply, A.delete],
-    defaults: { view: true, reply: true, delete: false },
+    // إضافة/تعديل هنا خاصة بإدارة تصنيفات الاستفسارات (مش إضافة استفسارات)
+    actions: [A.view, A.reply, A.create, A.edit, A.delete],
+    defaults: { view: true, reply: true, create: false, edit: false, delete: false },
   },
   announcements: {
     label: "الإعلانات",

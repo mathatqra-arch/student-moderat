@@ -2,7 +2,8 @@ export type Announcement = {
   id: string;
   title: string;
   content: string;
-  category: 'عام' | 'عاجل' | 'أكاديمي' | 'هام';
+  /** تصنيف ديناميكي من جدول categories — مش مقيد بقيم ثابتة */
+  category: string;
   is_pinned: boolean;
   created_by?: string;
   created_at: string;
@@ -23,7 +24,8 @@ export type Inquiry = {
   full_name: string;
   whatsapp_number: string;
   message: string;
-  category: 'أكاديمي' | 'جدول' | 'تكليف' | 'عام';
+  /** تصنيف ديناميكي من جدول categories — مش مقيد بقيم ثابتة */
+  category: string;
   status: 'new' | 'in_progress' | 'resolved' | 'archived';
   ai_suggestion?: string;
   assigned_to?: string;

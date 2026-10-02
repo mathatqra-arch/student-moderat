@@ -17,7 +17,7 @@ export async function GET() {
     const nowISO = new Date().toISOString();
 
     // كل الاستعلامات متوازية — أسرع ريكوست منفرد ممكن
-    const [annRes, schedRes, tasksRes, linksRes, datesRes] = await Promise.all([
+    const [annRes, schedRes, tasksRes, linksRes, datesRes, catsRes] = await Promise.all([
       // الإعلانات: المثبت الأول ثم الأحدث
       supabase
         .from("announcements")
@@ -46,6 +46,13 @@ export async function GET() {
         .gte("date", nowISO)
         .order("date", { ascending: true })
         .limit(10),
+      // التصنيفات النشطة (إعلانات + استفسارات) — للفورم والفلاتر
+      // لو الميجيشن مش متشغّل، الخطأ هنا مش هيوقف الرست — الفرونت يرجع للافتراضي
+      supabase
+        .from("categories")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
     ]);
 
     // لو كل الاستعلامات فشلت (مثلاً Supabase نازل) — رجّع خطأ واضح بدل داتا فاضية
@@ -59,6 +66,7 @@ export async function GET() {
       tasks: tasksRes.data || [],
       links: linksRes.data || [],
       important_dates: datesRes.data || [],
+      categories: catsRes.data || [],
       generated_at: new Date().toISOString(),
     };
 

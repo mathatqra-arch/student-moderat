@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Inquiry } from "@/types/database";
 import { MessageSquare, Phone, CheckCircle, Clock, Archive, Sparkles, Filter, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import CategoriesManager from "@/components/admin/CategoriesManager";
 import { whatsappChatUrl, whatsappDirectChatUrl, buildInquiryReplyMessage, isDesktopDevice, isValidWhatsappNumber } from "@/lib/whatsapp";
 
 const defaultInquiries: Inquiry[] = [
@@ -105,6 +106,9 @@ export default function InquiriesManager() {
 
   return (
     <div className="space-y-4">
+      {/* إدارة تصنيفات الاستفسارات — إضافة/تعديل/حذف حسب صلاحيات العضو */}
+      <CategoriesManager type="inquiry" />
+
       {/* Header & Filter Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-900/60 p-4 rounded-2xl border border-gray-800">
         <div>

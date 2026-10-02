@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PWAPrompts } from "@/components/ui/pwa/Prompts";
+import { DEFAULT_INQUIRY_CATEGORIES } from "@/lib/categories";
 import {
   formatTime12,
   formatTimeOfDay12,
@@ -61,10 +62,11 @@ interface BootstrapData {
   tasks: any[];
   links: any[];
   important_dates: any[];
+  categories?: any[];
   at: number; // وقت التخزين
 }
 
-const BOOTSTRAP_KEY = "student_bootstrap_v1";
+const BOOTSTRAP_KEY = "student_bootstrap_v2";
 const BOOTSTRAP_TTL = 60_000; // دقيقة — بعدها نحدّث من الشبكة في الخلفية
 
 // منع تكرار الريكوست المتوازي (StrictMode / ريمونت سريع)
@@ -197,7 +199,7 @@ export default function StudentPage() {
                     {activeTab === "home" && <HomeTab data={data} />}
                     {activeTab === "schedule" && <ScheduleTab schedules={data.schedules} />}
                     {activeTab === "tasks" && <TasksTab tasks={data.tasks} />}
-                    {activeTab === "inquiry" && <InquiryTab />}
+                    {activeTab === "inquiry" && <InquiryTab categories={data.categories} />}
                     {activeTab === "links" && <LinksTab links={data.links} />}
                   </>
                 )}
@@ -544,13 +546,28 @@ function TasksTab({ tasks }: { tasks: any[] }) {
 // ==========================================
 // Inquiry Tab
 // ==========================================
-function InquiryTab() {
+function InquiryTab({ categories }: { categories?: any[] }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [category, setCategory] = useState("أكاديمي");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // التصنيفات الديناميكية — من جدول categories، ولو مش متاحة نرجع للافتراضي
+  const inquiryCategories = (() => {
+    const rows = Array.isArray(categories) ? categories : [];
+    const names = rows
+      .filter((c: any) => c?.type === "inquiry" && c?.is_active !== false && typeof c?.name === "string")
+      .map((c: any) => c.name as string);
+    return names.length ? names : DEFAULT_INQUIRY_CATEGORIES;
+  })();
+
+  // لو التصنيف المختار اتشال → نرجّع لأول تصنيف متاح
+  useEffect(() => {
+    setCategory((current) => (inquiryCategories.includes(current) ? current : inquiryCategories[0] || ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -599,8 +616,8 @@ function InquiryTab() {
         </div>
         <div>
           <label className="text-xs font-bold mb-1.5 block">تصنيف الاستفسار</label>
-          <div className="grid grid-cols-4 gap-2">
-            {["أكاديمي", "جدول", "تكليف", "عام"].map((cat) => (
+          <div className="flex flex-wrap gap-2">
+            {inquiryCategories.map((cat) => (
               <button key={cat} type="button" onClick={() => setCategory(cat)} className={`brutal-chip ${category === cat ? "active" : ""}`}>{cat}</button>
             ))}
           </div>

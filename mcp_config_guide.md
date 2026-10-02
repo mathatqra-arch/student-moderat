@@ -8,7 +8,7 @@
 https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 ```
 
-**الإصدار:** v3.3.0 — بروتوكول `2025-06-18` | ~58 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل
+**الإصدار:** v3.7.0 — بروتوكول `2025-06-18` | 67 أداة | Rate Limit 120 طلب/دقيقة لكل مفتاح | سجل تدقيق كامل | **صلاحيات مرتبطة بحساب الأدمن**
 
 ---
 
@@ -60,14 +60,21 @@ https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 
 ---
 
-## 🛠️ الأدوات المتاحة (~55)
+## 🛠️ الأدوات المتاحة (67)
 
 ### لوحة التحكم
 | أداة | الوظيفة |
 |---|---|
-| `get_dashboard_stats` | إحصائيات شاملة لكل الجداول |
-| `search_platform` | بحث شامل في كل المحتوى |
+| `get_dashboard_stats` | إحصائيات شاملة (مفلترة حسب صلاحية العرض) |
+| `search_platform` | بحث شامل في كل المحتوى (كل قسم بيرجع لو صاحب المفتاح مسموح له بعرضه) |
 | `get_batch_context` | سياق شامل قبل توليد الردود (إعلانات + مهام + روابط + مواعيد) |
+
+### التصنيفات (ديناميكية — جديدة في v3.7)
+`list_categories` · `create_category` · `update_category` · `delete_category`
+
+> تصنيفات **الإعلانات** و**الاستفسارات** بقت ديناميكية من جدول `categories` —
+> الأدمن يضيفها/يعدلها من اللوحة (قسم الإعلانات والاستفسارات) أو الـ MCP هنا.
+> `create_announcement` / `update_inquiry` بيتحققوا إن التصنيف معرف فعلاً (لو الجدول شغال).
 
 ### الإعلانات والتكليفات
 `list_announcements` · `get_announcement` · `create_announcement` · `update_announcement` · `delete_announcement` · `list_tasks` · `get_task` · `create_task` · `create_academic_task` · `update_task` · `delete_task`
@@ -106,6 +113,23 @@ https://apcxwxnkntegbkimsmty.supabase.co/functions/v1/mcp
 `list_settings` · `set_setting` · `delete_setting` · `list_notification_logs` · `create_notification_log` · `delete_notification_log` · `list_team_members` · `create_team_member` · `update_team_member` · `delete_team_member` · **`list_api_keys` · `create_api_key` · `revoke_api_key` · `delete_api_key`** · `list_push_subscriptions` · `delete_push_subscription`
 
 ---
+
+## 🔐 الصلاحيات — الـ MCP بيتصرف بصلاحيات صاحب المفتاح (v3.7)
+
+كل مفتاح API مربوط بحساب اللي أنشأه (`api_keys.created_by`) وصلاحياته هي نفس صلاحياته في لوحة التحكم:
+
+- **الليدر / التوكن السري**: كل الأدوات (67)
+- **المساعد**: بيوصله بس الأدوات اللي ليها علاقة بصلاحياته —
+  ومحجوب من مورد (مثلاً `الاستفسارات → عرض = مفعّل ❌`) معناه:
+  `list_inquiries` / `get_inquiry` / `delete_inquiry` كلها بترجع رفض **-32003** برسالة عربية واضحة،
+  و`tools/list` مش بيعرضها من الأصل، وحتى `search_platform` بيرجع بدون قسم الاستفسارات
+- **بوابة `MCP → عرض`**: أي عضو منفعلهش من الليدر مش يقدر يستخدم الـ MCP خالص
+- **مفيش تصعيد**: مفتاح مساعد بيعمل مفتاح جديد بـ `create_api_key` → المفتاح الجديد بيرث صلاحياته هو
+- **فشل آمن**: مفتاح مربوط بحساب مش عضو فريق أو فشل جلب الصلاحيات → كل الأدوات مرفوضة
+
+> 🧪 **الشيك الحي** بعد النشر:
+> `MCP_URL=... MCP_LEADER_KEY=... MCP_LIMITED_KEY=... node scripts/test-mcp-permissions.mjs`
+> وفحص ثابت لتغطية الخريطة: `node scripts/check-mcp-tool-map.mjs`
 
 ## 🔒 ما الجديد في v3.3
 

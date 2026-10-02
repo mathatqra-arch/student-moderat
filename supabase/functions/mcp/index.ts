@@ -1,13 +1,15 @@
 // ==========================================
-// Supabase Edge Function: MCP Server v3.4
-// ~55 أداة تغطي كل وظائف المنصة للأدمن + OAuth 2.1
+// Supabase Edge Function: MCP Server v3.7
+// ~67 أداة تغطي كل وظائف المنصة للأدمن + OAuth 2.1
 // + Rate Limiting ذري + سجل تدقيق + تحقق من المدخلات
+// + v3.7: ربط الصلاحيات — كل مفتاح API بيتعامل بصلاحيات صاحبه من فريق الإدارة
+//   (api_keys.created_by → team_members.permissions) + أدوات التصنيفات الديناميكية
 // + الوقت 12 ساعة (ص/م) + الحضور أونلاين/اوفلاين + رابط الحصة
 // + قاعدة النوعين (v3.4): نوع الحصة نوعين فقط محاضرة/سكشن
 //   ونوع الحضور نوعين فقط في الكلية/أونلاين —
 //   في الكلية ← المكان (room) إلزامي، أونلاين ← اللينك (link) اختياري
 //
-// النشر: ./scripts/deploy-edge.sh
+// النشر: ./scripts/deploy-mcp-edge.sh
 // ==========================================
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -61,11 +63,17 @@ const TOOLS: Tool[] = [
   { name: "get_batch_context", description: "سياق شامل عن حالة الدفعة: آخر الإعلانات، المهام النشطة، الروابط الأكاديمية، ومواعيد هذا الأسبوع. استخدمها قبل توليد الردود.", inputSchema: objectSchema({}) },
 
   // ─── الإعلانات ───
-  { name: "list_announcements", description: "عرض الإعلانات (الأحدث أولاً، المثبت في الأعلى).", inputSchema: objectSchema({ limit: { type: "integer", default: 50 }, pinned_only: { type: "boolean", default: false } }) },
+  { name: "list_announcements", description: "عرض الإعلانات (الأحدث أولاً، المثبت في الأعلى).", inputSchema: objectSchema({ limit: { type: "integer", default: 50 }, pinned_only: { type: "boolean", default: false }, category: { type: "string", description: "فلترة بتصنيف — استخدم list_categories لمعرفة المتاح" } }) },
   { name: "get_announcement", description: "جلب إعلان واحد بالمعرف.", inputSchema: objectSchema({ id: { type: "string" } }, ["id"]) },
-  { name: "create_announcement", description: "نشر إعلان جديد للطلاب — يظهر فوراً في واجهة الطلاب.", inputSchema: objectSchema({ title: { type: "string" }, content: { type: "string" }, category: strEnum(["عاجل", "أكاديمي", "هام", "عام"]), is_pinned: { type: "boolean", default: false } }, ["title", "content"]) },
-  { name: "update_announcement", description: "تعديل إعلان موجود.", inputSchema: objectSchema({ announcement_id: { type: "string" }, title: { type: "string" }, content: { type: "string" }, category: strEnum(["عاجل", "أكاديمي", "هام", "عام"]), is_pinned: { type: "boolean" } }, ["announcement_id"]) },
+  { name: "create_announcement", description: "نشر إعلان جديد للطلاب — يظهر فوراً في واجهة الطلاب. التصنيف اختياري — استخدم list_categories لمعرفة التصنيفات المعرفة (الافتراضي عام).", inputSchema: objectSchema({ title: { type: "string" }, content: { type: "string" }, category: { type: "string", description: "تصنيف ديناميكي من list_categories (مثل: عاجل، أكاديمي) — الافتراضي عام" }, is_pinned: { type: "boolean", default: false } }, ["title", "content"]) },
+  { name: "update_announcement", description: "تعديل إعلان موجود.", inputSchema: objectSchema({ announcement_id: { type: "string" }, title: { type: "string" }, content: { type: "string" }, category: { type: "string", description: "تصنيف ديناميكي من list_categories" }, is_pinned: { type: "boolean" } }, ["announcement_id"]) },
   { name: "delete_announcement", description: "حذف إعلان نهائياً.", inputSchema: objectSchema({ announcement_id: { type: "string" } }, ["announcement_id"]) },
+
+  // ─── التصنيفات (ديناميكية — للإعلانات والاستفسارات) ───
+  { name: "list_categories", description: "عرض التصنيفات المعرفة للإعلانات و/أو الاستفسارات — استخدمها قبل create/update لمعرفة التصنيفات المتاحة.", inputSchema: objectSchema({ type: strEnum(["announcement", "inquiry", "all"]) }) },
+  { name: "create_category", description: "إضافة تصنيف جديد للإعلانات أو الاستفسارات — يظهر فوراً في لوحة الأدمن وفورم الطلاب.", inputSchema: objectSchema({ type: strEnum(["announcement", "inquiry"]), name: { type: "string", description: "اسم التصنيف مثل: امتحانات أو شكاوى" }, color: { type: "string", description: "hex اختياري مثل #3b82f6" }, sort_order: { type: "integer", description: "ترتيب الظهور (الأصغر أولاً)" } }, ["type", "name"]) },
+  { name: "update_category", description: "تعديل تصنيف (الاسم/اللون/الترتيب/التفعيل).", inputSchema: objectSchema({ category_id: { type: "string" }, name: { type: "string" }, color: { type: "string" }, sort_order: { type: "integer" }, is_active: { type: "boolean", description: "false = إخفاء من القوائم بدون حذف" } }, ["category_id"]) },
+  { name: "delete_category", description: "حذف تصنيف نهائياً — المحتوى القديم بهالتصنيف بيفضل موجود لكن التصنيف يختفي من القوائم.", inputSchema: objectSchema({ category_id: { type: "string" } }, ["category_id"]) },
 
   // ─── التكليفات ───
   { name: "list_tasks", description: "عرض التكليفات مرتبة بموعد التسليم.", inputSchema: objectSchema({ status: strEnum(["active", "completed", "archived", "all"]), limit: { type: "integer", default: 100 } }) },
@@ -107,7 +115,7 @@ const TOOLS: Tool[] = [
   { name: "list_inquiries", description: "عرض استفسارات الطلاب (يشمل رقم الواتساب والرد المقترح).", inputSchema: objectSchema({ status: strEnum(["new", "in_progress", "resolved", "archived", "all"]), limit: { type: "integer", default: 100 } }) },
   { name: "get_pending_inquiries", description: "استرجاع الاستفسارات المعلقة الجديدة (اختصار شائع لـ ChatGPT).", inputSchema: objectSchema({ status: strEnum(["new", "in_progress", "resolved", "archived", "all"]), limit: { type: "integer", default: 50 } }) },
   { name: "get_inquiry", description: "جلب استفسار واحد بالتفصيل.", inputSchema: objectSchema({ inquiry_id: { type: "string" } }, ["inquiry_id"]) },
-  { name: "update_inquiry", description: "تعديل استفسار (الحالة/الرد/التصنيف).", inputSchema: objectSchema({ inquiry_id: { type: "string" }, status: strEnum(["new", "in_progress", "resolved", "archived"]), ai_suggestion: { type: "string" }, category: { type: "string" } }, ["inquiry_id"]) },
+  { name: "update_inquiry", description: "تعديل استفسار (الحالة/الرد/التصنيف) — التصنيف تصنيف ديناميكي من list_categories(type=inquiry).", inputSchema: objectSchema({ inquiry_id: { type: "string" }, status: strEnum(["new", "in_progress", "resolved", "archived"]), ai_suggestion: { type: "string" }, category: { type: "string", description: "تصنيف ديناميكي من list_categories(type=inquiry)" } }, ["inquiry_id"]) },
   { name: "suggest_inquiry_reply", description: "حفظ رد مقترح من الذكاء الاصطناعي على استفسار طالب وتحديث حالته.", inputSchema: objectSchema({ inquiry_id: { type: "string" }, reply_text: { type: "string" }, new_status: strEnum(["in_progress", "resolved"]) }, ["inquiry_id", "reply_text"]) },
   { name: "resolve_inquiry", description: "إغلاق استفسار كمحلول بعد حل مشكلة الطالب.", inputSchema: objectSchema({ inquiry_id: { type: "string" }, resolution_note: { type: "string" } }, ["inquiry_id"]) },
   { name: "delete_inquiry", description: "حذف استفسار نهائياً.", inputSchema: objectSchema({ inquiry_id: { type: "string" } }, ["inquiry_id"]) },
@@ -149,6 +157,266 @@ const TOOLS: Tool[] = [
   { name: "list_push_subscriptions", description: "عرض اشتراكات إشعارات الطلاب (endpoints فقط).", inputSchema: objectSchema({ limit: { type: "integer", default: 200 } }) },
   { name: "delete_push_subscription", description: "حذف اشتراك إشعارات.", inputSchema: objectSchema({ subscription_id: { type: "string" } }, ["subscription_id"]) },
 ];
+
+// ==========================================
+// الصلاحيات (v3.7) — الـ MCP بيتعامل بصلاحيات صاحب المفتاح
+// api_keys.created_by (user_id) → team_members (role, permissions)
+// نفس تصنيف الموارد في لوحة الأدمن (src/lib/permissions.ts):
+// الـ leader يتجاوز — الباقي حسب JSON الصلاحيات — mcp.view بوابة الدخول
+// ==========================================
+
+type PermRule = { resource: string; action: string };
+type PermEntry = PermRule | "cross" | "categories";
+
+const TOOL_PERMISSIONS: Record<string, PermEntry> = {
+  // عابرة لمصادر متعددة — مسموحة مع بوابة mcp.view والفلترة داخلياً حسب العرض
+  get_dashboard_stats: "cross",
+  search_platform: "cross",
+  get_batch_context: "cross",
+
+  // الإعلانات
+  list_announcements: { resource: "announcements", action: "view" },
+  get_announcement: { resource: "announcements", action: "view" },
+  create_announcement: { resource: "announcements", action: "create" },
+  update_announcement: { resource: "announcements", action: "edit" },
+  delete_announcement: { resource: "announcements", action: "delete" },
+
+  // التصنيفات — المورد حسب نوع التصنيف (بيتفحص ديناميكياً)
+  list_categories: "categories",
+  create_category: "categories",
+  update_category: "categories",
+  delete_category: "categories",
+
+  // التكليفات
+  list_tasks: { resource: "tasks", action: "view" },
+  get_task: { resource: "tasks", action: "view" },
+  create_task: { resource: "tasks", action: "create" },
+  create_academic_task: { resource: "tasks", action: "create" },
+  update_task: { resource: "tasks", action: "edit" },
+  delete_task: { resource: "tasks", action: "delete" },
+
+  // المواد
+  list_subjects: { resource: "subjects", action: "view" },
+  create_subject: { resource: "subjects", action: "create" },
+  upsert_subject_by_name: { resource: "subjects", action: "create" },
+  update_subject: { resource: "subjects", action: "edit" },
+  delete_subject: { resource: "subjects", action: "delete" },
+
+  // الجداول
+  list_schedule: { resource: "schedules", action: "view" },
+  get_week_schedule: { resource: "schedules", action: "view" },
+  create_schedule_session: { resource: "schedules", action: "create" },
+  set_schedule_session: { resource: "schedules", action: "create" },
+  update_schedule_session: { resource: "schedules", action: "edit" },
+  delete_schedule_session: { resource: "schedules", action: "delete" },
+
+  // المواعيد المهمة
+  list_important_dates: { resource: "important_dates", action: "view" },
+  create_important_date: { resource: "important_dates", action: "create" },
+  update_important_date: { resource: "important_dates", action: "edit" },
+  delete_important_date: { resource: "important_dates", action: "delete" },
+
+  // الروابط السريعة (كل الكتابة = edit — مطابق لسياسات RLS)
+  list_quick_links: { resource: "links", action: "view" },
+  create_quick_link: { resource: "links", action: "edit" },
+  update_quick_link: { resource: "links", action: "edit" },
+  delete_quick_link: { resource: "links", action: "edit" },
+
+  // الاستفسارات
+  list_inquiries: { resource: "inquiries", action: "view" },
+  get_pending_inquiries: { resource: "inquiries", action: "view" },
+  get_inquiry: { resource: "inquiries", action: "view" },
+  get_inquiry_stats: { resource: "inquiries", action: "view" },
+  update_inquiry: { resource: "inquiries", action: "reply" },
+  suggest_inquiry_reply: { resource: "inquiries", action: "reply" },
+  resolve_inquiry: { resource: "inquiries", action: "reply" },
+  delete_inquiry: { resource: "inquiries", action: "delete" },
+
+  // التسليمات
+  list_submissions: { resource: "submissions", action: "view" },
+  update_submission: { resource: "submissions", action: "review" },
+  delete_submission: { resource: "submissions", action: "review" },
+
+  // الحضور
+  list_attendance: { resource: "attendance", action: "view" },
+  upsert_attendance: { resource: "attendance", action: "create" },
+  delete_attendance: { resource: "attendance", action: "edit" },
+
+  // الإعدادات + سجلات النظام (مورد settings)
+  list_settings: { resource: "settings", action: "view" },
+  set_setting: { resource: "settings", action: "edit" },
+  delete_setting: { resource: "settings", action: "edit" },
+  list_notification_logs: { resource: "settings", action: "view" },
+  create_notification_log: { resource: "settings", action: "edit" },
+  delete_notification_log: { resource: "settings", action: "edit" },
+  list_push_subscriptions: { resource: "settings", action: "view" },
+  delete_push_subscription: { resource: "settings", action: "edit" },
+
+  // الفريق
+  list_team_members: { resource: "team", action: "view" },
+  create_team_member: { resource: "team", action: "create" },
+  update_team_member: { resource: "team", action: "edit" },
+  delete_team_member: { resource: "team", action: "delete" },
+
+  // مفاتيح API
+  list_api_keys: { resource: "api_keys", action: "view" },
+  create_api_key: { resource: "api_keys", action: "create" },
+  revoke_api_key: { resource: "api_keys", action: "delete" },
+  delete_api_key: { resource: "api_keys", action: "delete" },
+};
+
+const RESOURCE_AR: Record<string, string> = {
+  inquiries: "الاستفسارات",
+  announcements: "الإعلانات",
+  tasks: "التكليفات",
+  schedules: "الجداول",
+  subjects: "المواد الدراسية",
+  important_dates: "التواريخ المهمة",
+  submissions: "التسليمات",
+  attendance: "الحضور",
+  links: "الروابط السريعة",
+  team: "الفريق والصلاحيات",
+  api_keys: "مفاتيح API",
+  mcp: "خادم MCP",
+  settings: "الإعدادات",
+};
+
+const ACTION_AR: Record<string, string> = {
+  view: "عرض",
+  create: "إضافة",
+  edit: "تعديل",
+  delete: "حذف",
+  reply: "رد/تحديث الحالة",
+  review: "مراجعة",
+};
+
+interface PermCtx {
+  isLeader: boolean;
+  permissions: Record<string, Record<string, boolean>> | null;
+  /** صاحب المفتاح (user_id) — المفاتيح الجديدة من MCP بترثه في created_by */
+  ownerUserId: string | null;
+  keyId: string | null;
+  keyName: string | null;
+  /** لو المفتاح مش قابل للاستخدام أصلاً — رسالة الرفض */
+  blocked: string | null;
+}
+
+function canDo(ctx: PermCtx, resource: string, action: string): boolean {
+  if (ctx.isLeader) return true;
+  return !!ctx.permissions?.[resource]?.[action];
+}
+
+function denialMsg(resource: string, action: string): string {
+  return `مرفوض: معندكش صلاحية «${ACTION_AR[action] || action}» على «${RESOURCE_AR[resource] || resource}» — كلم الليدر المسؤول يمنحك الصلاحية دي`;
+}
+
+/** بناء سياق الصلاحيات من المفتاح المتصادق عليه */
+async function buildPermCtx(supabase: any, authResult: { keyId?: string; keyName?: string; viaSecret?: boolean; ownerUserId?: string | null }): Promise<PermCtx> {
+  const base = { keyId: authResult.keyId || null, keyName: authResult.keyName || null };
+
+  // التوكن السري = مالك المنصة — صلاحيات كاملة
+  if (authResult.viaSecret) {
+    return { isLeader: true, permissions: null, ownerUserId: null, ...base, blocked: null };
+  }
+
+  const ownerUserId = authResult.ownerUserId ?? null;
+
+  // مفاتيح قديمة اتعملت قبل ربط الملكية → تفضل بصلاحيات كاملة (توافق خلفي)
+  if (!ownerUserId) {
+    return { isLeader: true, permissions: null, ownerUserId: null, ...base, blocked: null };
+  }
+
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("role, permissions, name")
+    .eq("user_id", ownerUserId)
+    .maybeSingle();
+
+  if (error) {
+    // فشل تقني في جلب الصلاحيات → منع (fail-closed) — الأمان أولاً
+    return { isLeader: false, permissions: {}, ownerUserId, ...base, blocked: "فشل التحقق من صلاحيات مفتاح API — حاول تاني أو كلم الليدر" };
+  }
+  if (!data) {
+    return { isLeader: false, permissions: {}, ownerUserId, ...base, blocked: "مفتاح API مربوط بحساب مش عضو في فريق الإدارة — المفتاح ده مرفوض. كلم الليدر يعيد إنشاء المفتاح من لوحة التحكم" };
+  }
+
+  const perms = (data.permissions && typeof data.permissions === "object") ? data.permissions : {};
+  return {
+    isLeader: data.role === "leader",
+    permissions: perms,
+    ownerUserId,
+    ...base,
+    blocked: null,
+  };
+}
+
+/**
+ * فحص صلاحية أداة قبل تنفيذها — يرجع رسالة رفض أو null لو مسموح.
+ * - المفاتيح الكاملة (ليدر/سري/قديمة): كل شيء
+ * - باقي المفاتيح: بوابة mcp.view أولاً ثم إذن الأداة نفسها
+ */
+function checkToolPermission(name: string, args: any, ctx: PermCtx): string | null {
+  if (ctx.isLeader) return null;
+  if (ctx.blocked) return ctx.blocked;
+  if (!canDo(ctx, "mcp", "view")) {
+    return "مرفوض: معندكش صلاحية استخدام خادم MCP (مورد MCP → عرض) — كلم الليدر يمنحك صلاحية MCP من إدارة الصلاحيات";
+  }
+
+  const entry = TOOL_PERMISSIONS[name];
+  if (!entry) return `أداة غير معروفة: ${name}`;
+  if (entry === "cross") return null; // مسموحة — الفلترة حسب صلاحية العرض جوا التنفيذ
+
+  if (entry === "categories") {
+    const type = String(args?.type || "").trim();
+    if (name === "list_categories") {
+      if (type === "announcement") return canDo(ctx, "announcements", "view") ? null : denialMsg("announcements", "view");
+      if (type === "inquiry") return canDo(ctx, "inquiries", "view") ? null : denialMsg("inquiries", "view");
+      // all → يكفي إنه يقدر يشوف واحدة على الأقل (النتيجة بتتفلتر)
+      if (!canDo(ctx, "announcements", "view") && !canDo(ctx, "inquiries", "view")) {
+        return "مرفوض: معندكش صلاحية عرض على الإعلانات أو الاستفسارات أصلاً";
+      }
+      return null;
+    }
+    // create/update/delete — النوع إلزامي في السكيما
+    const res = type === "announcement" ? "announcements" : "inquiries";
+    const action = name === "create_category" ? "create" : name === "update_category" ? "edit" : "delete";
+    return canDo(ctx, res, action) ? null : denialMsg(res, action);
+  }
+
+  return canDo(ctx, entry.resource, entry.action) ? null : denialMsg(entry.resource, entry.action);
+}
+
+/** tools/list مفلترة — الـ AI مش بيشوف غير الأدوات المسموح له بيها */
+function permittedTools(ctx: PermCtx): Tool[] {
+  if (ctx.isLeader) return TOOLS;
+  if (ctx.blocked || !canDo(ctx, "mcp", "view")) return [];
+  return TOOLS.filter((t) => {
+    const entry = TOOL_PERMISSIONS[t.name];
+    if (!entry) return false;
+    if (entry === "cross" || entry === "categories") return true; // الفلترة النهائية وقت التنفيذ
+    return canDo(ctx, entry.resource, entry.action);
+  });
+}
+
+/**
+ * تحقق أن تصنيف معين معرف فعلاً (ديناميكي من جدول categories).
+ * متسامح: لو الجدول مش موجود بعد (الميجيشن مش متشغل) أو فاضي → بنسمح بأي قيمة
+ * عشان النشر الجديد مبيكسرش قبل تشغيل الميجيشن.
+ */
+async function assertCategoryValid(supabase: any, type: "announcement" | "inquiry", value: string): Promise<void> {
+  try {
+    const { data, error } = await table(supabase, "categories").select("name").eq("type", type).eq("is_active", true);
+    if (error || !data || data.length === 0) return;
+    const names = data.map((r: any) => String(r.name));
+    if (!names.includes(value)) {
+      const ar = type === "announcement" ? "الإعلانات" : "الاستفسارات";
+      throw new Error(`التصنيف "${value}" مش من تصنيفات ${ar} المعرفة. المتاح: ${names.join("، ")} — أو أضفه أولاً بأداة create_category`);
+    }
+  } catch (e: any) {
+    if (e?.message?.includes("مش من تصنيفات")) throw e;
+    // خطأ آخر في القراءة → نتساهل (الجدول غالباً مش موجود)
+  }
+}
 
 // ==========================================
 // Helper functions
@@ -400,7 +668,7 @@ function generateApiKey(): string {
 // ==========================================
 // المصادقة
 // ==========================================
-async function verifyAuth(req: Request, supabase: any): Promise<{ authorized: boolean; keyId?: string; keyName?: string; viaSecret?: boolean }> {
+async function verifyAuth(req: Request, supabase: any): Promise<{ authorized: boolean; keyId?: string; keyName?: string; viaSecret?: boolean; ownerUserId?: string | null }> {
   const authHeader = req.headers.get("Authorization");
   const apiKeyHeader = req.headers.get("x-api-key");
   let token = "";
@@ -414,11 +682,11 @@ async function verifyAuth(req: Request, supabase: any): Promise<{ authorized: bo
     return { authorized: true, keyName: "MCP Secret Token", viaSecret: true };
   }
 
-  // 2. مفاتيح API من قاعدة البيانات (مع فحص الإبطال)
+  // 2. مفاتيح API من قاعدة البيانات (مع فحص الإبطال + جلب المالك للصلاحيات)
   try {
     const { data, error } = await supabase
       .from("api_keys")
-      .select("id, name, revoked_at")
+      .select("id, name, revoked_at, created_by")
       .eq("key_value", token)
       .is("revoked_at", null)
       .single();
@@ -431,7 +699,7 @@ async function verifyAuth(req: Request, supabase: any): Promise<{ authorized: bo
       .eq("id", data.id)
       .then(() => {}, () => {});
 
-    return { authorized: true, keyId: data.id, keyName: data.name };
+    return { authorized: true, keyId: data.id, keyName: data.name, ownerUserId: data.created_by ?? null };
   } catch {
     return { authorized: false };
   }
@@ -523,76 +791,153 @@ async function auditLog(
 }
 
 // ==========================================
-// تنفيذ الأدوات (~55)
+// تنفيذ الأدوات (~67)
+// ctx = سياق صلاحيات صاحب المفتاح — للفلترة الداخلية للأدوات العابرة
 // ==========================================
-async function executeTool(name: string, args: any, supabase: any) {
+async function executeTool(name: string, args: any, supabase: any, ctx: PermCtx) {
   args = sanitizeDeep(args);
   const limit = Math.min(Number(args?.limit || 100), 200);
   switch (name) {
     case "get_dashboard_stats": {
-      const tables = ["announcements", "tasks", "inquiries", "quick_links", "team_members", "subjects", "schedules", "important_dates", "submissions", "attendance"];
+      // فلترة حسب صلاحية العرض — المحجوب من مورد مش بيشوف إحصائياته
+      const tableResource: Array<[string, string]> = [
+        ["announcements", "announcements"], ["tasks", "tasks"], ["inquiries", "inquiries"],
+        ["quick_links", "links"], ["team_members", "team"], ["subjects", "subjects"],
+        ["schedules", "schedules"], ["important_dates", "important_dates"],
+        ["submissions", "submissions"], ["attendance", "attendance"],
+      ];
       const counts: Record<string, number> = {};
-      for (const t of tables) {
+      for (const [t, resource] of tableResource) {
+        if (!canDo(ctx, resource, "view")) continue;
         const { count, error } = await table(supabase, t).select("*", { count: "exact", head: true });
         if (!error) counts[t] = count || 0;
       }
-      const { data: activeTasks } = await table(supabase, "tasks").select("id").eq("status", "active");
-      const { data: newInquiries } = await table(supabase, "inquiries").select("id").eq("status", "new");
-      return { content: [{ type: "text", text: JSON.stringify({ generated_at: new Date().toISOString(), counts, active_tasks: activeTasks?.length || 0, new_inquiries: newInquiries?.length || 0 }, null, 2) }] };
+      let activeTasks = 0;
+      if (canDo(ctx, "tasks", "view")) {
+        const { data } = await table(supabase, "tasks").select("id").eq("status", "active");
+        activeTasks = data?.length || 0;
+      }
+      let newInquiries = 0;
+      if (canDo(ctx, "inquiries", "view")) {
+        const { data } = await table(supabase, "inquiries").select("id").eq("status", "new");
+        newInquiries = data?.length || 0;
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ generated_at: new Date().toISOString(), counts, active_tasks: activeTasks, new_inquiries: newInquiries, _filtered: !ctx.isLeader }, null, 2) }] };
     }
     case "search_platform": {
       const q = requireStr(args, "query", 100);
       const term = `%${q}%`;
-      const [a, t, i, s, l, d] = await Promise.all([
-        table(supabase, "announcements").select("*").or(`title.ilike.${term},content.ilike.${term}`).limit(limit),
-        table(supabase, "tasks").select("*").or(`title.ilike.${term},subject.ilike.${term},description.ilike.${term}`).limit(limit),
-        table(supabase, "inquiries").select("*").or(`full_name.ilike.${term},message.ilike.${term}`).limit(limit),
-        table(supabase, "subjects").select("*").or(`name.ilike.${term},code.ilike.${term},instructor.ilike.${term}`).limit(limit),
-        table(supabase, "quick_links").select("*").or(`title.ilike.${term},type.ilike.${term}`).limit(limit),
-        table(supabase, "important_dates").select("*").or(`title.ilike.${term},description.ilike.${term}`).limit(limit),
-      ]);
-      return { content: [{ type: "text", text: JSON.stringify({ query: q, announcements: a.data || [], tasks: t.data || [], inquiries: i.data || [], subjects: s.data || [], links: l.data || [], dates: d.data || [] }, null, 2) }] };
+      // كل قسم بيظهر بس لو صاحب المفتاح عنده صلاحية العرض عليه
+      const sections: Record<string, any> = {};
+      if (canDo(ctx, "announcements", "view")) {
+        const r = await table(supabase, "announcements").select("*").or(`title.ilike.${term},content.ilike.${term}`).limit(limit);
+        sections.announcements = r.data || [];
+      }
+      if (canDo(ctx, "tasks", "view")) {
+        const r = await table(supabase, "tasks").select("*").or(`title.ilike.${term},subject.ilike.${term},description.ilike.${term}`).limit(limit);
+        sections.tasks = r.data || [];
+      }
+      if (canDo(ctx, "inquiries", "view")) {
+        const r = await table(supabase, "inquiries").select("*").or(`full_name.ilike.${term},message.ilike.${term}`).limit(limit);
+        sections.inquiries = r.data || [];
+      }
+      if (canDo(ctx, "subjects", "view")) {
+        const r = await table(supabase, "subjects").select("*").or(`name.ilike.${term},code.ilike.${term},instructor.ilike.${term}`).limit(limit);
+        sections.subjects = r.data || [];
+      }
+      if (canDo(ctx, "links", "view")) {
+        const r = await table(supabase, "quick_links").select("*").or(`title.ilike.${term},type.ilike.${term}`).limit(limit);
+        sections.links = r.data || [];
+      }
+      if (canDo(ctx, "important_dates", "view")) {
+        const r = await table(supabase, "important_dates").select("*").or(`title.ilike.${term},description.ilike.${term}`).limit(limit);
+        sections.important_dates = r.data || [];
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ query: q, ...sections, _filtered: !ctx.isLeader }, null, 2) }] };
     }
     case "get_batch_context": {
       const weekAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const [announcementsRes, tasksRes, linksRes, datesRes] = await Promise.all([
-        table(supabase, "announcements").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }).limit(5),
-        table(supabase, "tasks").select("*").eq("status", "active").order("deadline", { ascending: true }).limit(15),
-        table(supabase, "quick_links").select("*").order("order_index", { ascending: true }),
-        table(supabase, "important_dates").select("*, subjects(*)").gte("date", new Date().toISOString()).lte("date", weekAhead).order("date", { ascending: true }).limit(10),
-      ]);
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            recent_announcements: announcementsRes.data || [],
-            active_tasks: tasksRes.data || [],
-            academic_links: linksRes.data || [],
-            upcoming_dates: datesRes.data || [],
-            generated_at: new Date().toISOString(),
-          }, null, 2),
-        }],
-      };
+      const result: Record<string, any> = { generated_at: new Date().toISOString() };
+      if (canDo(ctx, "announcements", "view")) {
+        const r = await table(supabase, "announcements").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }).limit(5);
+        result.recent_announcements = r.data || [];
+      }
+      if (canDo(ctx, "tasks", "view")) {
+        const r = await table(supabase, "tasks").select("*").eq("status", "active").order("deadline", { ascending: true }).limit(15);
+        result.active_tasks = r.data || [];
+      }
+      if (canDo(ctx, "links", "view")) {
+        const r = await table(supabase, "quick_links").select("*").order("order_index", { ascending: true });
+        result.academic_links = r.data || [];
+      }
+      if (canDo(ctx, "important_dates", "view")) {
+        const r = await table(supabase, "important_dates").select("*, subjects(*)").gte("date", new Date().toISOString()).lte("date", weekAhead).order("date", { ascending: true }).limit(10);
+        result.upcoming_dates = r.data || [];
+      }
+      result._filtered = !ctx.isLeader;
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
 
     // ─── Announcements ───
     case "list_announcements": {
       let q = table(supabase, "announcements").select("*").order("is_pinned", { ascending: false }).order("created_at", { ascending: false }).limit(limit);
       if (args?.pinned_only) q = q.eq("is_pinned", true);
+      if (args?.category) q = q.eq("category", String(args.category));
       return rowResult(q);
     }
     case "get_announcement": return rowResult(table(supabase, "announcements").select("*").eq("id", args.id).single());
     case "create_announcement": {
+      const category = String(args.category || "عام").trim() || "عام";
+      await assertCategoryValid(supabase, "announcement", category);
       const payload = {
         title: requireStr(args, "title", 200),
         content: requireStr(args, "content", 10000),
-        category: args.category || "عام",
+        category,
         is_pinned: Boolean(args.is_pinned),
       };
       return rowResult(table(supabase, "announcements").insert([payload]).select().single());
     }
-    case "update_announcement": { const { announcement_id, ...patch } = args || {}; return rowResult(table(supabase, "announcements").update(stripUndefined(patch)).eq("id", announcement_id).select().single()); }
+    case "update_announcement": {
+      const { announcement_id, ...patch } = args || {};
+      if (patch.category !== undefined) await assertCategoryValid(supabase, "announcement", String(patch.category));
+      return rowResult(table(supabase, "announcements").update(stripUndefined(patch)).eq("id", announcement_id).select().single());
+    }
     case "delete_announcement": return rowResult(table(supabase, "announcements").delete().eq("id", args.announcement_id).select().single());
+
+    // ─── Categories (التصنيفات الديناميكية) ───
+    case "list_categories": {
+      const type = args?.type || "all";
+      let q = table(supabase, "categories").select("*").order("sort_order", { ascending: true }).order("name", { ascending: true });
+      if (type !== "all") q = q.eq("type", type);
+      const { data, error } = await q;
+      if (error) throw error;
+      let rows = data || [];
+      if (!ctx.isLeader && type === "all") {
+        const canAnn = canDo(ctx, "announcements", "view");
+        const canInq = canDo(ctx, "inquiries", "view");
+        rows = rows.filter((r: any) => (r.type === "announcement" && canAnn) || (r.type === "inquiry" && canInq));
+      }
+      return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
+    }
+    case "create_category": {
+      const type = args?.type === "announcement" || args?.type === "inquiry" ? args.type : null;
+      if (!type) throw new Error('الحقل "type" مطلوب بقيمة "announcement" أو "inquiry"');
+      const payload: Record<string, any> = { type, name: requireStr(args, "name", 50) };
+      if (args?.color) payload.color = String(args.color).slice(0, 20);
+      if (Number.isInteger(args?.sort_order)) payload.sort_order = args.sort_order;
+      return rowResult(table(supabase, "categories").insert([payload]).select().single());
+    }
+    case "update_category": {
+      const { category_id, ...patch } = args || {};
+      const clean = stripUndefined(patch);
+      if (clean.name !== undefined) clean.name = String(clean.name).slice(0, 50);
+      if (clean.color !== undefined) clean.color = clean.color ? String(clean.color).slice(0, 20) : null;
+      if (clean.is_active !== undefined) clean.is_active = Boolean(clean.is_active);
+      if (Object.keys(clean).length) clean.updated_at = new Date().toISOString();
+      return rowResult(table(supabase, "categories").update(clean).eq("id", category_id).select().single());
+    }
+    case "delete_category":
+      return rowResult(table(supabase, "categories").delete().eq("id", requireStr(args, "category_id", 64)).select().single());
 
     // ─── Tasks ───
     case "list_tasks": {
@@ -710,6 +1055,10 @@ async function executeTool(name: string, args: any, supabase: any) {
         if (found.data) {
           subjectId = found.data.id;
         } else {
+          // الإنشاء التلقائي للمادة محتاج صلاحية subjects.create — مفيش تصعيد عبر الأداة دي
+          if (!ctx.isLeader && !canDo(ctx, "subjects", "create")) {
+            throw new Error(`المادة "${name}" مش موجودة وإنشاؤها محتاج صلاحية «إضافة» على «المواد الدراسية» — مرّر subject_id لموجودة أو كلم الليدر`);
+          }
           const created = await table(supabase, "subjects").insert([{ name }]).select().single();
           if (created.error) throw created.error;
           subjectId = created.data.id;
@@ -768,7 +1117,7 @@ async function executeTool(name: string, args: any, supabase: any) {
       return rowResult(q);
     }
     case "get_inquiry": return rowResult(table(supabase, "inquiries").select("*").eq("id", args.inquiry_id).single());
-    case "update_inquiry": { const { inquiry_id, ...patch } = args || {}; return rowResult(table(supabase, "inquiries").update(stripUndefined(patch)).eq("id", inquiry_id).select().single()); }
+    case "update_inquiry": { const { inquiry_id, ...patch } = args || {}; if (patch.category !== undefined) await assertCategoryValid(supabase, "inquiry", String(patch.category)); return rowResult(table(supabase, "inquiries").update(stripUndefined(patch)).eq("id", inquiry_id).select().single()); }
     case "suggest_inquiry_reply": {
       const inquiryId = requireStr(args, "inquiry_id", 64);
       const reply = requireStr(args, "reply_text", 5000);
@@ -860,15 +1209,17 @@ async function executeTool(name: string, args: any, supabase: any) {
       const keyName = requireStr(args, "name", 100);
       const fullKeyValue = generateApiKey();
       const keyPreview = `bmp_key_…${fullKeyValue.slice(-6)}`;
+      // المفتاح الجديد بيرث مالك المفتاح اللي أنشأه — مفيش تصعيد صلاحيات عبر MCP
+      // (مفتاح مساعد محدود → مفاتيحه الجديدة محدودة بنفس صلاحياته)
       const { data, error } = await table(supabase, "api_keys")
-        .insert([{ name: keyName, key_preview: keyPreview, key_value: fullKeyValue }])
+        .insert([{ name: keyName, key_preview: keyPreview, key_value: fullKeyValue, created_by: ctx.ownerUserId }])
         .select("id, name, key_preview, created_at")
         .single();
       if (error) throw error;
       return {
         content: [{
           type: "text",
-          text: `تم إنشاء المفتاح بنجاح.\n\nالمفتاح الكامل (احفظه الآن — لن يعرض مرة أخرى):\n${fullKeyValue}\n\n${JSON.stringify(data, null, 2)}`,
+          text: `تم إنشاء المفتاح بنجاح.${ctx.ownerUserId ? " المفتاح مربوط بصلاحيات حسابك — مش هيدي صلاحيات أكتر منك." : ""}\n\nالمفتاح الكامل (احفظه الآن — لن يعرض مرة أخرى):\n${fullKeyValue}\n\n${JSON.stringify(data, null, 2)}`,
         }],
       };
     }
@@ -895,7 +1246,7 @@ async function executeTool(name: string, args: any, supabase: any) {
 // ==========================================
 // JSON-RPC handler
 // ==========================================
-async function handleJsonRpc(body: any, supabase: any, authCtx: { keyId?: string; keyName?: string; viaSecret?: boolean }, clientIp: string): Promise<Response> {
+async function handleJsonRpc(body: any, supabase: any, authCtx: PermCtx, clientIp: string): Promise<Response> {
   const { jsonrpc, method, params, id } = body;
   if (jsonrpc && jsonrpc !== "2.0") {
     return jsonResponse({ jsonrpc: "2.0", error: { code: -32600, message: `Invalid jsonrpc version: ${jsonrpc}` }, id: id ?? null });
@@ -908,7 +1259,7 @@ async function handleJsonRpc(body: any, supabase: any, authCtx: { keyId?: string
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false }, resources: {}, prompts: {}, logging: {} },
-          serverInfo: { name: "student-management-mcp", version: "3.6.0" },
+          serverInfo: { name: "student-management-mcp", version: "3.7.0" },
         },
         id,
       });
@@ -917,12 +1268,32 @@ async function handleJsonRpc(body: any, supabase: any, authCtx: { keyId?: string
     case "ping":
       return jsonResponse({ jsonrpc: "2.0", result: {}, id });
     case "tools/list":
-      return jsonResponse({ jsonrpc: "2.0", result: { tools: TOOLS }, id });
+      // قائمة الأدوات مفلترة حسب صلاحيات صاحب المفتاح — الـ AI مش بيشوف غير المسموح
+      return jsonResponse({ jsonrpc: "2.0", result: { tools: permittedTools(authCtx) }, id });
     case "tools/call": {
       const { name, arguments: args } = params || {};
       const startedAt = Date.now();
+      // بوابة الصلاحيات — قبل أي تنفيذ
+      const denial = checkToolPermission(name, args, authCtx);
+      if (denial) {
+        auditLog(supabase, {
+          keyId: authCtx.keyId || null,
+          keyName: authCtx.keyName || null,
+          tool: name || "[missing]",
+          args,
+          success: false,
+          errorMessage: denial,
+          durationMs: Date.now() - startedAt,
+          clientIp,
+        }).then(() => {}, () => {});
+        return jsonResponse({
+          jsonrpc: "2.0",
+          error: { code: -32003, message: denial, data: { tool_name: name, permission_denied: true } },
+          id,
+        });
+      }
       try {
-        const result = await executeTool(name, args, supabase);
+        const result = await executeTool(name, args, supabase, authCtx);
         // سجل التدقيق — best-effort
         auditLog(supabase, {
           keyId: authCtx.keyId || null,
@@ -1163,17 +1534,19 @@ async function handleRequest(req: Request, supabase: any) {
     }
 
     const clientIp = getClientIp(req);
-    const authCtx = { keyId: authResult.keyId, keyName: authResult.keyName, viaSecret: authResult.viaSecret };
+
+    // سياق الصلاحيات — مفتاح واحد = صلاحيات صاحبه من فريق الإدارة
+    const permCtx = await buildPermCtx(supabase, authResult);
 
     try {
       const body = await req.json();
       // دعم JSON-RPC batch — بحد أقصى 20 طلب لكل دفعة
       if (Array.isArray(body)) {
         const capped = body.slice(0, 20);
-        const results = await Promise.all(capped.map(async (rpc) => await handleJsonRpc(rpc, supabase, authCtx, clientIp)));
+        const results = await Promise.all(capped.map(async (rpc) => await handleJsonRpc(rpc, supabase, permCtx, clientIp)));
         return jsonResponse(results);
       }
-      return await handleJsonRpc(body, supabase, authCtx, clientIp);
+      return await handleJsonRpc(body, supabase, permCtx, clientIp);
     } catch (err: any) {
       return jsonResponse({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error: " + (err.message || "Invalid JSON") }, id: null }, 400);
     }

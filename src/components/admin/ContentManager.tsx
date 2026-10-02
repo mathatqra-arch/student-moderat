@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import CategoriesManager from "@/components/admin/CategoriesManager";
+import { fetchCategoryNames, DEFAULT_ANNOUNCEMENT_CATEGORIES } from "@/lib/categories";
 
 interface Announcement {
   id: string;
@@ -45,6 +47,7 @@ export default function ContentManager() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("عام");
+  const [categories, setCategories] = useState<string[]>(DEFAULT_ANNOUNCEMENT_CATEGORIES);
   const [isPinned, setIsPinned] = useState(false);
   const [subject, setSubject] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
@@ -63,12 +66,18 @@ export default function ContentManager() {
   const fetchData = async () => {
     setLoading(true);
     const supabase = createClient();
-    const [annRes, taskRes] = await Promise.all([
+    const [annRes, taskRes, catsRes] = await Promise.all([
       supabase.from("announcements").select("*").order("created_at", { ascending: false }),
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+      fetchCategoryNames(supabase, "announcement"),
     ]);
     setAnnouncements(annRes.data || []);
     setTasks(taskRes.data || []);
+    if (catsRes.length) {
+      setCategories(catsRes);
+      // لو التصنيف المختار اتشال من القائمة → نرجّع لأول تصنيف متاح
+      setCategory((current) => (catsRes.includes(current) ? current : catsRes[0] || "عام"));
+    }
     setLoading(false);
   };
 
@@ -203,6 +212,9 @@ export default function ContentManager() {
       {/* Announcements */}
       {activeTab === "announcements" && (
         <div className="space-y-4">
+          {/* إدارة التصنيفات — إضافة/تعديل/حذف حسب صلاحيات العضو */}
+          <CategoriesManager type="announcement" />
+
           {/* Add/Edit Form */}
           <div className="brutal-card p-5 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b-2 border-ink">
@@ -223,10 +235,9 @@ export default function ContentManager() {
                 <div>
                   <label className="text-xs font-bold text-ink mb-1 block">التصنيف</label>
                   <select value={category} onChange={(e) => setCategory(e.target.value)} className="brutal-input w-full px-3 py-2 text-sm">
-                    <option value="عاجل">عاجل</option>
-                    <option value="أكاديمي">أكاديمي</option>
-                    <option value="هام">هام</option>
-                    <option value="عام">عام</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
               </div>

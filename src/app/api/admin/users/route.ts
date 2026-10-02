@@ -66,7 +66,10 @@ function normalizeEgyptianPhone(phone: string): string {
 
 // ==========================================
 // نطاق الرؤية الهرمي (hierarchy scoping):
-// - الأدمن الأساسي (leader): يشوف الكل
+// - الأدمن الرئيسي (super_admin): المتحكم الوحيد — يشوف الكل ويدير الكل،
+//   ولا يراه ولا يُمَس من أي حساب آخر مهما كان دوره
+// - الليدر (leader): يشوف شجرته فقط (نفسه + كل من تحته) —
+//   لا يرى الأدمن الرئيسي ولا شجرات الليدرات الآخرين إطلاقاً
 // - باقي الأدمنة: يشوفوا نفسهم + الحسابات اللي ضافوها تحتو (سلسلة parent_id)
 // - الحساب بيتبوّى تحت اللي ضافه (parent_id) عند الإنشاء
 // ==========================================
@@ -174,9 +177,11 @@ export async function GET() {
 
     const members = teamMembers || [];
 
-    // نطاق الرؤية: leader يشوف الكل، غيره يشوف نفسه + الناس اللي ضافهم تحتو
+    // نطاق الرؤية: الأدمن الرئيسي (super_admin) يشوف الكل،
+    // غيره (حتى الليدر) يشوف نفسه + الناس اللي تحتو في الشجرة فقط
+    // → الأدمن الرئيسي غير مرئي لأي حساب آخر مهما كان دوره
     let visibleMemberIds: Set<string> | null = null;
-    if (profile.role !== "leader") {
+    if (profile.role !== "super_admin") {
       visibleMemberIds = collectVisibleMemberIds(profile.teamMemberId, members);
     }
 
@@ -197,9 +202,15 @@ export async function GET() {
       };
     });
 
-    // فلترة حسب النطاق (غير الليدر): فقط أعضاء الفريق ضمن نسلِه
+    // فلترة حسب النطاق (غير الأدمن الرئيسي): فقط أعضاء الفريق ضمن شجرته
+    // + حجب صريح للأدمن الرئيسي (دفاع عميق — مهما حدث في الشجرة يظل مخفياً)
     const scopedUsers = visibleMemberIds
-      ? users.filter((u) => u.team_member_id && visibleMemberIds!.has(u.team_member_id))
+      ? users.filter(
+          (u) =>
+            u.role !== "super_admin" &&
+            u.team_member_id &&
+            visibleMemberIds!.has(u.team_member_id)
+        )
       : users;
 
     // رتّب: team_members الأول، ثم الباقي
@@ -241,10 +252,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // منع غير الأدمن الأساسي من إنشاء حسابات leader (تثبيت للصلاحيات)
-    if (role === "leader" && profile.role !== "leader") {
+    // الدور super_admin محجوز — الأدمن الرئيسي واحد فقط (يُنشأ من السكربت فقط)
+    if (role === "super_admin") {
       return NextResponse.json(
-        { error: "مسموح فقط للأدمن الأساسي بإنشاء حسابات leader" },
+        { error: "الأدمن الرئيسي واحد فقط في النظام — لا يمكن إنشاء غيره" },
+        { status: 403 }
+      );
+    }
+
+    // منع غير الأدمن الرئيسي من إنشاء حسابات leader (تثبيت للصلاحيات)
+    if (role === "leader" && profile.role !== "super_admin") {
+      return NextResponse.json(
+        { error: "مسموح فقط للأدمن الرئيسي بإنشاء حسابات leader" },
         { status: 403 }
       );
     }
@@ -329,11 +348,12 @@ export async function PUT(request: Request) {
 
     const adminClient = getAdminClient();
 
-    // حماية النطاق: غير الليدر يعدّل نفسه (بدون دور/صلاحيات) أو نسلِه فقط
-    if (profile.role !== "leader") {
+    // حماية النطاق: غير الأدمن الرئيسي يعدّل نفسه (بدون دور/صلاحيات) أو شجرته فقط
+    // (الليدر كذلك — شجرته هو، مش شجرات الليدرات الآخرين ولا الأدمن الرئيسي)
+    if (profile.role !== "super_admin") {
       const { data: targetMember } = await adminClient
         .from("team_members")
-        .select("id, user_id, parent_id")
+        .select("id, user_id, parent_id, role")
         .eq("user_id", user_id)
         .maybeSingle();
 
@@ -344,11 +364,19 @@ export async function PUT(request: Request) {
         );
       }
 
+      // حجب صريح: الأدمن الرئيسي لا يُمَس من أي حساب آخر مهما كان دوره
+      if (targetMember.role === "super_admin") {
+        return NextResponse.json(
+          { error: "الأدمن الرئيسي لا يمكن تعديله من أي حساب آخر" },
+          { status: 403 }
+        );
+      }
+
       if (targetMember.user_id === profile.userId) {
-        // تعديل النفس: الاسم وكلمة المرور بس — الدور والصلاحيات للأدمن الأساسي
+        // تعديل النفس: الاسم وكلمة المرور بس — الدور والصلاحيات للأدمن الرئيسي
         if (permissions || role) {
           return NextResponse.json(
-            { error: "مش تقدر تغيّر دورك أو صلاحياتك بنفسك — كلم الأدمن الأساسي" },
+            { error: "مش تقدر تغيّر دورك أو صلاحياتك بنفسك — كلم الأدمن الرئيسي" },
             { status: 400 }
           );
         }
@@ -372,13 +400,28 @@ export async function PUT(request: Request) {
         }
       }
 
-      // غير الليدر ممنوع يعيّن أحد leader
+      // غير الأدمن الرئيسي ممنوع يعيّن أحد leader
       if (role === "leader") {
         return NextResponse.json(
-          { error: "مسموح فقط للأدمن الأساسي بتعيين دور leader" },
+          { error: "مسموح فقط للأدمن الرئيسي بتعيين دور leader" },
           { status: 403 }
         );
       }
+    }
+
+    // الدور super_admin محجوز — لا يُمنح من الـ API إطلاقاً
+    // والأدمن الرئيسي لا يغيّر دوره بنفسه (حماية الجذر)
+    if (role === "super_admin") {
+      return NextResponse.json(
+        { error: "الأدمن الرئيسي واحد فقط في النظام — دوره ثابت ولا يمكن منحه أو تغييره" },
+        { status: 403 }
+      );
+    }
+    if (role && user_id === user.id) {
+      return NextResponse.json(
+        { error: "لا يمكنك تغيير دورك أثناء تسجيل الدخول به" },
+        { status: 400 }
+      );
     }
 
     // 1. تحديث كلمة المرور إن وُجدت
@@ -468,8 +511,9 @@ export async function DELETE(request: Request) {
       .eq("user_id", user_id)
       .single();
 
-    // حماية النطاق: غير الليدر يحذف من ضمن الحسابات اللي ضافها تحتو فقط
-    if (profile.role !== "leader") {
+    // حماية النطاق: غير الأدمن الرئيسي يحذف من ضمن شجرته فقط
+    // (الليدر كذلك — لا يصل لحسابات الليدرات الآخرين ولا للأدمن الرئيسي)
+    if (profile.role !== "super_admin") {
       const { data: allMembers } = await adminClient
         .from("team_members")
         .select("id, parent_id");
@@ -483,9 +527,18 @@ export async function DELETE(request: Request) {
           { status: 403 }
         );
       }
+
+      // حجب صريح: الأدمن الرئيسي لا يُحذف من أي حساب آخر
+      if (targetMember.role === "super_admin") {
+        return NextResponse.json(
+          { error: "الأدمن الرئيسي لا يمكن حذفه" },
+          { status: 403 }
+        );
+      }
     }
 
-    if (targetMember?.role === "leader") {
+    // حماية آخر leader — لا تنطبق على الأدمن الرئيسي (هو المتحكم الوحيد)
+    if (targetMember?.role === "leader" && profile.role !== "super_admin") {
       const { count } = await adminClient
         .from("team_members")
         .select("*", { count: "exact", head: true })

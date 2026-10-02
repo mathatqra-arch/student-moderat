@@ -46,6 +46,25 @@ function normalizePhone(phone) {
   return cleaned;
 }
 
+// صلاحيات كاملة (للـ leader و super_admin) — مطابقة لـ LEADER_PERMISSIONS في src/lib/permissions.ts
+const FULL_PERMISSIONS = Object.fromEntries(
+  [
+    ["inquiries", ["view", "reply", "create", "edit", "delete"]],
+    ["announcements", ["view", "create", "edit", "delete"]],
+    ["tasks", ["view", "create", "edit", "delete"]],
+    ["schedules", ["view", "create", "edit", "delete"]],
+    ["subjects", ["view", "create", "edit", "delete"]],
+    ["important_dates", ["view", "create", "edit", "delete"]],
+    ["submissions", ["view", "review"]],
+    ["attendance", ["view", "create", "edit"]],
+    ["links", ["view", "edit"]],
+    ["team", ["view", "create", "edit", "delete"]],
+    ["api_keys", ["view", "create", "delete"]],
+    ["mcp", ["view", "test"]],
+    ["settings", ["view", "edit"]],
+  ].map(([resource, actions]) => [resource, Object.fromEntries(actions.map((a) => [a, true]))])
+);
+
 async function supabaseRequest(endpoint, method = "GET", body = null) {
   const headers = {
     Authorization: `Bearer ${SERVICE_KEY}`,
@@ -124,6 +143,7 @@ async function createAdmin({ phone, name, role = "assistant", password }) {
   console.log(`   Phone:   ${data.phone}`);
 
   // 2. إضافته لجدول team_members
+  // leader و super_admin يأخذون JSON صلاحيات كاملة (حماية RLS للاستعلامات المباشرة من المتصفح)
   const { status: tStatus, data: tData } = await supabaseRequest(
     "/rest/v1/team_members",
     "POST",
@@ -131,6 +151,9 @@ async function createAdmin({ phone, name, role = "assistant", password }) {
       user_id: data.id,
       name,
       role,
+      ...(role === "leader" || role === "super_admin"
+        ? { permissions: FULL_PERMISSIONS }
+        : {}),
     }
   );
 
@@ -190,6 +213,58 @@ async function setPassword({ phone, password }) {
   console.log(`   كلمة المرور الجديدة: ${password}\n`);
 }
 
+async function setRole({ phone, role }) {
+  const normalizedPhone = normalizePhone(phone);
+  console.log(`\n🎭 تغيير دور ${normalizedPhone} إلى "${role}"`);
+
+  if (!["super_admin", "leader", "assistant"].includes(role)) {
+    console.error("❌ الدور يجب أن يكون: super_admin أو leader أو assistant");
+    process.exit(1);
+  }
+
+  const { data: listData } = await supabaseRequest(
+    "/auth/v1/admin/users?page=1&perPage=1000"
+  );
+  const users = listData.users || [];
+  const target = users.find((u) => {
+    if (!u.phone) return false;
+    const userPhone = u.phone.replace(/^\+/, "");
+    const inputPhone = normalizedPhone.replace(/^\+/, "");
+    return (
+      u.phone === normalizedPhone ||
+      userPhone === inputPhone ||
+      userPhone === inputPhone.replace(/^\+2/, "")
+    );
+  });
+
+  if (!target) {
+    console.error(`❌ لا يوجد مستخدم بالرقم ${normalizedPhone}`);
+    process.exit(1);
+  }
+
+  const patch = { role };
+  if (role === "leader" || role === "super_admin") {
+    patch.permissions = FULL_PERMISSIONS;
+  }
+
+  const { status, data } = await supabaseRequest(
+    "/rest/v1/team_members?user_id=eq." + target.id,
+    "PATCH",
+    patch
+  );
+
+  if (status >= 400) {
+    console.error(`❌ فشل: ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+
+  console.log(`✅ تم تغيير الدور إلى "${role}" بنجاح`);
+  if (role === "leader" || role === "super_admin") {
+    console.log(`   ✅ وتم إسناد صلاحيات كاملة (حماية RLS)`);
+  }
+  console.log("");
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -228,18 +303,30 @@ async function main() {
       await setPassword({ phone, password });
       break;
     }
+    case "set-role": {
+      const { phone, role } = flags;
+      if (!phone || !role) {
+        console.error("❌ phone و role مطلوبان");
+        process.exit(1);
+      }
+      await setRole({ phone, role });
+      break;
+    }
     default:
       console.log(`
 📚 Admin User Management
 
 Usage:
   node scripts/admin-manage.js list
-  node scripts/admin-manage.js create --phone=01040945655 --name="Main Admin" --role=leader --password=Secret123
+  node scripts/admin-manage.js create --phone=01040945655 --name="الأدمن الرئيسي" --role=super_admin --password=Secret123
   node scripts/admin-manage.js set-password --phone=01040945655 --password=NewPassword123
+  node scripts/admin-manage.js set-role --phone=01040945655 --role=super_admin
 
-Roles:
-  leader     — ليدر رئيسي (صلاحيات كاملة)
-  assistant  — مشرف مساعد
+Roles (التسلسل الهرمي):
+  super_admin — الأدمن الرئيسي: المتحكم الوحيد، لا يُرى ولا يُمَس من أحد،
+                ووحده من ينشئ الليدرات (يُنشأ من السكربت فقط — واحد بس)
+  leader      — ليدر: كل الصلاحيات داخل شجرته فقط (شجرة جديدة تحت الأدمن الرئيسي)
+  assistant   — مشرف مساعد: حسب JSON الصلاحيات داخل شجرته
 `);
       break;
   }

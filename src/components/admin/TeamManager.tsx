@@ -100,8 +100,11 @@ export default function TeamManager() {
     }
   };
 
-  // نطاق الواجهة حسب دور وصلاحيات الحساب الحالي
-  const isLeader = me?.role === "leader";
+  // نطاق الواجهة حسب دور وصلاحيات الحساب الحالي:
+  // super_admin (الأدمن الرئيسي): يرى كل الشجرات — المتحكم الوحيد
+  // leader: صلاحيات واجهة كاملة لكن السيرفر يقصر النتائج على شجرته فقط
+  const isSuperAdmin = me?.role === "super_admin";
+  const isLeader = me?.role === "leader" || isSuperAdmin;
   const canCreateUsers = isLeader || !!me?.permissions?.team?.create;
   const canEditUsers = isLeader || !!me?.permissions?.team?.edit;
   const canDeleteUsers = isLeader || !!me?.permissions?.team?.delete;
@@ -279,9 +282,11 @@ export default function TeamManager() {
               <h3 className="font-bold text-base">إدارة الفريق والأذونات</h3>
               <p className="text-xs text-[rgb(var(--text-muted))]">
                 {me
-                  ? isLeader
-                    ? "بتشوف كل الحسابات — أنت الأدمن الأساسي"
-                    : "بتشوف حسابك والحسابات اللي ضفتها تحتو بس"
+                  ? isSuperAdmin
+                    ? "أنت الأدمن الرئيسي — المتحكم الوحيد، بتشوف كل الشجرات"
+                    : isLeader
+                      ? "بتشوف شجرتك: حسابك وكل اللي تحته بس"
+                      : "بتشوف حسابك والحسابات اللي ضفتها تحتو بس"
                   : "المشرفون وصلاحياتهم"}
               </p>
             </div>
@@ -326,9 +331,11 @@ export default function TeamManager() {
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                      user.role === "leader"
-                        ? "bg-purple-600/20 text-purple-500 border border-purple-500/30"
-                        : "bg-brand-600/15 text-brand-500 border border-brand-500/30"
+                      user.role === "super_admin"
+                        ? "bg-rose-600/20 text-rose-500 border border-rose-500/40"
+                        : user.role === "leader"
+                          ? "bg-purple-600/20 text-purple-500 border border-purple-500/30"
+                          : "bg-brand-600/15 text-brand-500 border border-brand-500/30"
                     }`}>
                       {user.name?.charAt(0) || user.phone?.charAt(0) || "?"}
                     </div>
@@ -336,11 +343,13 @@ export default function TeamManager() {
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-sm truncate">{user.name || "بدون اسم"}</p>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
-                          user.role === "leader"
-                            ? "bg-purple-500/10 text-purple-500 border-purple-500/30"
-                            : "bg-brand-500/10 text-brand-500 border-brand-500/30"
+                          user.role === "super_admin"
+                            ? "bg-rose-500/10 text-rose-500 border-rose-500/40"
+                            : user.role === "leader"
+                              ? "bg-purple-500/10 text-purple-500 border-purple-500/30"
+                              : "bg-brand-500/10 text-brand-500 border-brand-500/30"
                         }`}>
-                          {user.role === "leader" ? "رئيسي" : "مساعد"}
+                          {user.role === "super_admin" ? "الأدمن الرئيسي" : user.role === "leader" ? "ليدر" : "مساعد"}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-[rgb(var(--text-muted))]">
@@ -456,8 +465,9 @@ export default function TeamManager() {
                   className="w-full bg-[rgb(var(--surface-subtle))] border border-[rgb(var(--border))] rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500"
                 >
                   <option value="assistant">مشرف مساعد</option>
-                  {isLeader && (
-                    <option value="leader">ليدر رئيسي (كل الصلاحيات)</option>
+                  {/* إنشاء الليدرات للأدمن الرئيسي فقط — كل ليدر يبدأ شجرته تحت الأدمن الرئيسي */}
+                  {isSuperAdmin && (
+                    <option value="leader">ليدر (كل الصلاحيات — شجرة جديدة تحته)</option>
                   )}
                 </select>
               </div>
@@ -574,10 +584,12 @@ export default function TeamManager() {
               </button>
             </div>
 
-            {showPermissionsModal.role === "leader" && (
+            {(showPermissionsModal.role === "leader" || showPermissionsModal.role === "super_admin") && (
               <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-xl text-xs text-purple-500">
                 <Shield className="w-4 h-4 inline ml-1" />
-                هذا المستخدم leader — لديه كل الصلاحيات تلقائياً
+                {showPermissionsModal.role === "super_admin"
+                  ? "هذا الحساب الأدمن الرئيسي — المتحكم الوحيد، له كل الصلاحيات دائماً"
+                  : "هذا المستخدم leader — لديه كل الصلاحيات تلقائياً"}
               </div>
             )}
 
@@ -590,7 +602,7 @@ export default function TeamManager() {
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {config.actions.map((action) => {
-                      const isChecked = showPermissionsModal.role === "leader"
+                      const isChecked = (showPermissionsModal.role === "leader" || showPermissionsModal.role === "super_admin")
                         ? true
                         : (editPermissions[resource as keyof Permissions] as any)?.[action.key] || false;
                       return (
@@ -600,13 +612,13 @@ export default function TeamManager() {
                             isChecked
                               ? "bg-emerald-500/10 border-emerald-500/30"
                               : "bg-[rgb(var(--surface))] border-[rgb(var(--border))]"
-                          } ${showPermissionsModal.role === "leader" ? "opacity-50 cursor-not-allowed" : ""}`}
+                          } ${(showPermissionsModal.role === "leader" || showPermissionsModal.role === "super_admin") ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => togglePermission(resource, action.key)}
-                            disabled={showPermissionsModal.role === "leader"}
+                            disabled={(showPermissionsModal.role === "leader" || showPermissionsModal.role === "super_admin")}
                             className="rounded"
                           />
                           <span className="text-[11px]">{action.label}</span>
@@ -632,7 +644,7 @@ export default function TeamManager() {
                 <Button
                   type="submit"
                   isLoading={savingPermissions}
-                  disabled={showPermissionsModal.role === "leader"}
+                  disabled={(showPermissionsModal.role === "leader" || showPermissionsModal.role === "super_admin")}
                   className="flex-1"
                 >
                   <Shield className="w-4 h-4" />

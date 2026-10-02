@@ -2,7 +2,13 @@
 // نظام الصلاحيات — مصدر واحد للحقيقة (Frontend + API)
 // يطابق نموذج team_members.permissions في قاعدة البيانات
 // (supabase/migrations/20260925_admin_permissions.sql)
-// الـ leader يتجاوز كل الفحوصات — الباقي حسب JSON الصلاحيات
+//
+// التسلسل الهرمي للأدوار:
+// - super_admin (الأدمن الرئيسي): المتحكم الوحيد — يتجاوز كل الفحوصات،
+//   لا يظهر ولا يُمَس من أي حساب آخر مهما كان دوره
+// - leader (ليدر): كل الصلاحيات لكن داخل شجرته فقط (نفسه + من تحته)
+//   ولا يرى الأدمن الرئيسي ولا شجرات الليدرات الآخرين إطلاقاً
+// - assistant: حسب JSON الصلاحيات + نطاق شجرته
 // ==========================================
 
 export type PermissionActionMap = Record<string, boolean>;
@@ -125,13 +131,13 @@ export function normalizePermissions(raw: unknown): PermissionMap {
   return base;
 }
 
-/** فحص إذن — الـ leader عنده كل شيء، الباقي حسب الـ JSON */
+/** فحص إذن — super_admin و leader عندهم كل شيء، الباقي حسب الـ JSON */
 export function hasPermission(
   perms: PermissionMap | null | undefined,
   resource: string,
   action: string,
   role?: string | null
 ): boolean {
-  if (role === "leader") return true;
+  if (role === "super_admin" || role === "leader") return true;
   return !!perms?.[resource]?.[action];
 }

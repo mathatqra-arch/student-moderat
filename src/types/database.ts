@@ -47,6 +47,6 @@ export type TeamMember = {
   id: string;
   user_id: string;
   name: string;
-  role: 'leader' | 'assistant';
+  role: 'super_admin' | 'leader' | 'assistant';
   created_at: string;
 };

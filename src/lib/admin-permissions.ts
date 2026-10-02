@@ -2,13 +2,15 @@
 // التحقق من صلاحيات الأدمن على السيرفر (API routes فقط)
 // - يجيب المستخدم الحالي من الجلسة (cookies → Supabase Auth)
 // - يجيب بروفايله من team_members عبر service role
-// - profileCan يفحص الإذن (الـ leader يتجاوز)
+// - profileCan يفحص الإذن (super_admin و leader يتجاوزون)
+// - الأدمن المطلق (super_admin): شفاء ذاتي لدوره لو اتبدّأ
 // ==========================================
 
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { normalizePermissions, PermissionMap } from "./permissions";
+import { normalizePermissions, PermissionMap, LEADER_PERMISSIONS } from "./permissions";
+import { isAbsoluteAdminPhone } from "./absolute-admin";
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL || "https://apcxwxnkntegbkimsmty.supabase.co";
@@ -86,14 +88,32 @@ export async function getCurrentAdminCaller(): Promise<AdminCaller> {
       return { user, profile: null, configError: null };
     }
 
+    // ≡≡≡ الأدمن المطلق (super_admin) — شفاء ذاتي ≡≡≡
+    // لو دور الحساب اتبدّأ من أي جهة، الرقم المطابق بيرجع super_admin
+    // فوراً في الذاكرة + إصلاح دائم في القاعدة (best-effort)
+    let effectiveRole = data.role || "assistant";
+    let effectivePermissions = normalizePermissions(data.permissions);
+    if (isAbsoluteAdminPhone(user.phone) && effectiveRole !== "super_admin") {
+      effectiveRole = "super_admin";
+      effectivePermissions = normalizePermissions(LEADER_PERMISSIONS);
+      try {
+        await admin
+          .from("team_members")
+          .update({ role: "super_admin", permissions: LEADER_PERMISSIONS })
+          .eq("user_id", user.id);
+      } catch (healError) {
+        console.warn("absolute-admin self-heal failed:", healError);
+      }
+    }
+
     return {
       user,
       profile: {
         userId: user.id,
         teamMemberId: data.id ?? null,
         name: data.name ?? null,
-        role: data.role || "assistant",
-        permissions: normalizePermissions(data.permissions),
+        role: effectiveRole,
+        permissions: effectivePermissions,
       },
       configError: null,
     };
@@ -102,13 +122,13 @@ export async function getCurrentAdminCaller(): Promise<AdminCaller> {
   }
 }
 
-/** فحص إذن — الـ leader يتجاوز كل الفحوصات */
+/** فحص إذن — super_admin و leader يتجاوزون كل الفحوصات */
 export function profileCan(
   profile: AdminProfile | null,
   resource: string,
   action: string
 ): boolean {
   if (!profile) return false;
-  if (profile.role === "leader") return true;
+  if (profile.role === "super_admin" || profile.role === "leader") return true;
   return !!profile.permissions?.[resource]?.[action];
 }

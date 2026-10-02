@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { missingServerConfig, configErrorResponse } from "@/lib/server-config";
+import { LEADER_PERMISSIONS } from "@/lib/permissions";
+import { isAbsoluteAdminPhone } from "@/lib/absolute-admin";
 
 // ==========================================
 // Admin Login Endpoint — Phone + Password
@@ -205,14 +207,30 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       );
     }
 
-    // 4. النجاح
+    // 4. الأدمن المطلق (super_admin) — ترقية ذاتية عند الدخول
+    //    الرقم المطابق بيرقى دورّه في القاعدة فوراً (من السيرفر فقط)
+    //    فتفعّل حمايّاته وإخفاؤه عن كل الحسابات الأخرى من أول جلسة
+    let effectiveRole: string = teamMember.role;
+    if (isAbsoluteAdminPhone(signInData.user.phone) && effectiveRole !== "super_admin") {
+      effectiveRole = "super_admin";
+      try {
+        await adminClient
+          .from("team_members")
+          .update({ role: "super_admin", permissions: LEADER_PERMISSIONS })
+          .eq("user_id", targetId);
+      } catch (promoteError) {
+        console.warn("absolute-admin promotion failed:", promoteError);
+      }
+    }
+
+    // 5. النجاح
     return NextResponse.json({
       ok: true,
       user: {
         id: signInData.user.id,
         phone: signInData.user.phone || undefined,
         name: teamMember.name,
-        role: teamMember.role,
+        role: effectiveRole,
         needs_password_change: needsPasswordChange,
       },
     });

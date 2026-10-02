@@ -292,6 +292,8 @@ const ACTION_AR: Record<string, string> = {
 
 interface PermCtx {
   isLeader: boolean;
+  /** صاحب المفتاح هو الأدمن الرئيسي نفسه (super_admin) — المتحكم الوحيد */
+  isSuperAdmin: boolean;
   permissions: Record<string, Record<string, boolean>> | null;
   /** صاحب المفتاح (user_id) — المفاتيح الجديدة من MCP بترثه في created_by */
   ownerUserId: string | null;
@@ -316,14 +318,14 @@ async function buildPermCtx(supabase: any, authResult: { keyId?: string; keyName
 
   // التوكن السري = مالك المنصة — صلاحيات كاملة
   if (authResult.viaSecret) {
-    return { isLeader: true, permissions: null, ownerUserId: null, ...base, blocked: null };
+    return { isLeader: true, isSuperAdmin: true, permissions: null, ownerUserId: null, ...base, blocked: null };
   }
 
   const ownerUserId = authResult.ownerUserId ?? null;
 
   // مفاتيح قديمة اتعملت قبل ربط الملكية → تفضل بصلاحيات كاملة (توافق خلفي)
   if (!ownerUserId) {
-    return { isLeader: true, permissions: null, ownerUserId: null, ...base, blocked: null };
+    return { isLeader: true, isSuperAdmin: true, permissions: null, ownerUserId: null, ...base, blocked: null };
   }
 
   const { data, error } = await supabase
@@ -334,15 +336,16 @@ async function buildPermCtx(supabase: any, authResult: { keyId?: string; keyName
 
   if (error) {
     // فشل تقني في جلب الصلاحيات → منع (fail-closed) — الأمان أولاً
-    return { isLeader: false, permissions: {}, ownerUserId, ...base, blocked: "فشل التحقق من صلاحيات مفتاح API — حاول تاني أو كلم الليدر" };
+    return { isLeader: false, isSuperAdmin: false, permissions: {}, ownerUserId, ...base, blocked: "فشل التحقق من صلاحيات مفتاح API — حاول تاني أو كلم الليدر" };
   }
   if (!data) {
-    return { isLeader: false, permissions: {}, ownerUserId, ...base, blocked: "مفتاح API مربوط بحساب مش عضو في فريق الإدارة — المفتاح ده مرفوض. كلم الليدر يعيد إنشاء المفتاح من لوحة التحكم" };
+    return { isLeader: false, isSuperAdmin: false, permissions: {}, ownerUserId, ...base, blocked: "مفتاح API مربوط بحساب مش عضو في فريق الإدارة — المفتاح ده مرفوض. كلم الليدر يعيد إنشاء المفتاح من لوحة التحكم" };
   }
 
   const perms = (data.permissions && typeof data.permissions === "object") ? data.permissions : {};
   return {
-    isLeader: data.role === "leader",
+    isLeader: data.role === "leader" || data.role === "super_admin",
+    isSuperAdmin: data.role === "super_admin",
     permissions: perms,
     ownerUserId,
     ...base,
@@ -1197,10 +1200,60 @@ async function executeTool(name: string, args: any, supabase: any, ctx: PermCtx)
     case "delete_notification_log": return rowResult(table(supabase, "notifications_log").delete().eq("id", args.notification_id).select().single());
 
     // ─── Team members ───
-    case "list_team_members": return rowResult(table(supabase, "team_members").select("*").order("created_at"));
-    case "create_team_member": return rowResult(table(supabase, "team_members").insert([stripUndefined(args)]).select().single());
-    case "update_team_member": { const { team_member_id, ...patch } = args || {}; return rowResult(table(supabase, "team_members").update(stripUndefined(patch)).eq("id", team_member_id).select().single()); }
-    case "delete_team_member": return rowResult(table(supabase, "team_members").delete().eq("id", args.team_member_id).select().single());
+    // الأدمن الرئيسي (super_admin) محمي في كل أدوات الفريق:
+    // لا يظهر في القوائم ولا يُعدَّل ولا يُحذف من أي مفتاح غير مفتاحه،
+    // دوره محجوز (لا يُمنح من الـ MCP)، وإنشاء الليدرات لصاحبه فقط
+    case "list_team_members": {
+      if (ctx.isSuperAdmin) {
+        return rowResult(table(supabase, "team_members").select("*").order("created_at"));
+      }
+      const { data: teamRows, error: teamErr } = await table(supabase, "team_members")
+        .select("*")
+        .order("created_at");
+      if (teamErr) throw teamErr;
+      const visible = (teamRows || []).filter((m: any) => m.role !== "super_admin");
+      return { content: [{ type: "text", text: JSON.stringify(visible, null, 2) }] };
+    }
+    case "create_team_member": {
+      if (args?.role === "super_admin") {
+        throw new Error("مرفوض: دور الأدمن الرئيسي محجوز — لا يمكن منحه من الـ MCP");
+      }
+      if (args?.role === "leader" && !ctx.isSuperAdmin) {
+        throw new Error("مرفوض: إنشاء حسابات leader للأدمن الرئيسي فقط");
+      }
+      return rowResult(table(supabase, "team_members").insert([stripUndefined(args)]).select().single());
+    }
+    case "update_team_member": {
+      const { team_member_id, ...patch } = args || {};
+      if (!ctx.isSuperAdmin) {
+        const { data: targetRow } = await table(supabase, "team_members")
+          .select("role")
+          .eq("id", team_member_id)
+          .maybeSingle();
+        if (targetRow?.role === "super_admin") {
+          throw new Error("مرفوض: الأدمن الرئيسي لا يمكن تعديله من أي حساب آخر");
+        }
+      }
+      if (patch?.role === "super_admin") {
+        throw new Error("مرفوض: دور الأدمن الرئيسي محجوز — لا يمكن منحه من الـ MCP");
+      }
+      if (patch?.role === "leader" && !ctx.isSuperAdmin) {
+        throw new Error("مرفوض: تعيين دور leader للأدمن الرئيسي فقط");
+      }
+      return rowResult(table(supabase, "team_members").update(stripUndefined(patch)).eq("id", team_member_id).select().single());
+    }
+    case "delete_team_member": {
+      if (!ctx.isSuperAdmin) {
+        const { data: targetRow } = await table(supabase, "team_members")
+          .select("role")
+          .eq("id", args.team_member_id)
+          .maybeSingle();
+        if (targetRow?.role === "super_admin") {
+          throw new Error("مرفوض: الأدمن الرئيسي لا يمكن حذفه");
+        }
+      }
+      return rowResult(table(supabase, "team_members").delete().eq("id", args.team_member_id).select().single());
+    }
 
     // ─── API keys ───
     case "list_api_keys":

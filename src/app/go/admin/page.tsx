@@ -114,10 +114,10 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  // هل التاب ظاهر للمستخدم الحالي؟ (الـ leader يشوف كل شيء)
+  // هل التاب ظاهر للمستخدم الحالي؟ (الأدمن الرئيسي والليدر يشوفوا كل شيء)
   const tabVisible = (id: TabId): boolean => {
     if (!me) return false;
-    if (me.role === "leader") return true;
+    if (me.role === "leader" || me.role === "super_admin") return true;
     const config = TABS.find((t) => t.id === id);
     if (!config) return false;
     return config.resources.some((res) => hasPermission(me.permissions, res, "view", me.role));
@@ -193,7 +193,7 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-green border border-ink" />
                   <span className="text-2xs font-bold text-gray truncate max-w-[130px]">
-                    {me.name || (me.role === "leader" ? "ليدر رئيسي" : "مشرف مساعد")}
+                    {me.name || (me.role === "super_admin" ? "الأدمن الرئيسي" : me.role === "leader" ? "ليدر" : "مشرف مساعد")}
                   </span>
                 </div>
               </div>
